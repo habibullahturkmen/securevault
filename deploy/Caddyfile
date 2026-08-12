@@ -1,0 +1,15 @@
+# TLS 1.3 entry point (proposal §5.1, trust boundary 2).
+# For the localhost demo Caddy issues its own local CA certificate
+# (`tls internal`); for a real deployment replace `localhost` with the
+# domain name and Caddy obtains certificates automatically.
+
+localhost {
+	tls internal
+
+	# Transport security is decided here at the TLS boundary; all
+	# content-security headers come from the app so they exist in
+	# exactly one place.
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+	reverse_proxy app:8080
+}

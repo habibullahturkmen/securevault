@@ -1,0 +1,66 @@
+# SecureVault demo/production stack: Caddy (TLS 1.3 entry point) -> app
+# (single Go binary, trusted zone) -> PostgreSQL + encrypted blob volume
+# (protected data zone). Only Caddy is reachable from outside.
+#
+# Usage, from the repository root:
+#   cp .env.example .env    # then set SECUREVAULT_MASTER_KEY (make genkey)
+#   docker compose -f deploy/docker-compose.yml --env-file .env up --build
+
+name: securevault
+
+services:
+  caddy:
+    image: caddy:2
+    # Only 443 is published: the demo uses https://localhost directly, and
+    # port 80 (plain-HTTP redirect) often collides with a local web server.
+    # For a real deployment with a domain, add "80:80" so Caddy can answer
+    # ACME challenges and redirect HTTP.
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - app
+    networks: [edge, internal]
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      SECUREVAULT_MASTER_KEY: ${SECUREVAULT_MASTER_KEY:?set in .env — generate with make genkey}
+      DATABASE_URL: postgres://securevault:${POSTGRES_PASSWORD:-securevault}@db:5432/securevault
+      ENV: prod
+    volumes:
+      - blob-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+    # Not exposed to the host: reachable only through Caddy.
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: securevault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securevault}
+      POSTGRES_DB: securevault
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securevault"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [internal]
+
+volumes:
+  blob-data:
+  pg-data:
+  caddy-data:
+
+networks:
+  edge:
+  internal:
+    # No direct host access; the app and db talk only on this network.

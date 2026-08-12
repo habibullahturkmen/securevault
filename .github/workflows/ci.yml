@@ -1,0 +1,152 @@
+# SecureVault CI security gates (proposal §5.3, "secure delivery pipeline"):
+# formatting, vet, race-detected tests against real PostgreSQL, a production
+# build, Semgrep static analysis, and gitleaks secret scanning on every push.
+# The OWASP ZAP baseline scan runs on demand (workflow_dispatch) and before
+# submission.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: securevault
+          POSTGRES_PASSWORD: securevault
+          POSTGRES_DB: securevault_test_auth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:" && echo "$unformatted" && exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Create per-package test databases
+        run: |
+          PGPASSWORD=securevault psql -h localhost -U securevault -d securevault_test_auth \
+            -c "CREATE DATABASE securevault_test_api OWNER securevault;"
+
+      - name: Race-detected tests (unit + adversarial + integration)
+        env:
+          TEST_DATABASE_URL: postgres://securevault:securevault@localhost:5432/securevault_test
+        run: go test -race ./...
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Build frontend
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Build production binary (embedded UI)
+        run: go build -tags embedui -o bin/securevault ./cmd/server
+
+  semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Semgrep static analysis
+        run: |
+          pip install --quiet semgrep
+          semgrep scan --config auto --error --exclude web/dist
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # OWASP ZAP baseline dynamic scan: run manually (Actions tab -> ci ->
+  # Run workflow). Findings of medium or higher must be resolved or
+  # justified before submission (proposal §7).
+  zap-baseline:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: securevault
+          POSTGRES_PASSWORD: securevault
+          POSTGRES_DB: securevault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: web/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build and start the app
+        env:
+          DATABASE_URL: postgres://securevault:securevault@localhost:5432/securevault
+          LISTEN_ADDR: 0.0.0.0:8080
+          DATA_DIR: /tmp/securevault-data
+          ENV: dev
+        run: |
+          cd web && pnpm install --frozen-lockfile && pnpm build && cd ..
+          go build -tags embedui -o bin/securevault ./cmd/server
+          export SECUREVAULT_MASTER_KEY=$(openssl rand -hex 32)
+          ./bin/securevault &
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8080/api/health && break || sleep 1
+          done
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.14.0
+        with:
+          target: http://localhost:8080
+          fail_action: true

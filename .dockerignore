@@ -1,0 +1,7 @@
+# Never send secrets, local state, or host build artifacts to the daemon.
+.env
+.git
+data/
+bin/
+web/node_modules/
+web/dist/

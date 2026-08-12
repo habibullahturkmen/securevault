@@ -1,0 +1,16 @@
+# Secrets — never commit real configuration
+.env
+
+# Build artifacts
+/bin/
+web/dist/
+web/node_modules/
+
+# Local data (encrypted blobs, dev scratch)
+/data/
+
+# Editor/OS noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
