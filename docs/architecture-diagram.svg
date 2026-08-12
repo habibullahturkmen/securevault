@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1240 800" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 9 5 L 0 9 z" fill="#475467"/>
+    </marker>
+  </defs>
+
+  <rect width="1240" height="800" fill="#ffffff"/>
+
+  <text x="620" y="34" text-anchor="middle" font-size="19" font-weight="700" fill="#101828">SecureVault — logical architecture, data flows, and trust boundaries</text>
+
+  <!-- ═══════════ Zone containers ═══════════ -->
+  <!-- Zone 1: client -->
+  <rect x="24" y="70" width="200" height="640" rx="10" fill="#eef7ee" stroke="#67a56a" stroke-width="1.5"/>
+  <text x="40" y="96" font-size="14" font-weight="700" fill="#2e5c31">1 · Client zone</text>
+  <text x="40" y="113" font-size="10.5" fill="#4c704e">untrusted</text>
+
+  <!-- Zone 2: TLS -->
+  <rect x="264" y="70" width="160" height="640" rx="10" fill="#e9f2fb" stroke="#5f94cf" stroke-width="1.5"/>
+  <text x="280" y="96" font-size="14" font-weight="700" fill="#1e4e79">2 · TLS entry</text>
+  <text x="280" y="113" font-size="10.5" fill="#3d6a94">HTTPS boundary</text>
+
+  <!-- Zone 3: application -->
+  <rect x="464" y="70" width="420" height="640" rx="10" fill="#f1edf9" stroke="#8b74c9" stroke-width="1.5"/>
+  <text x="484" y="96" font-size="14" font-weight="700" fill="#46327e">3 · Trusted application</text>
+  <text x="484" y="113" font-size="10.5" fill="#63549b">one static Go binary — UI, API, engine, migrations</text>
+
+  <!-- Zone 4: data -->
+  <rect x="924" y="70" width="292" height="640" rx="10" fill="#fdf6e6" stroke="#d5a339" stroke-width="1.5"/>
+  <text x="940" y="96" font-size="14" font-weight="700" fill="#7a5c14">4 · Protected data</text>
+  <text x="940" y="113" font-size="10.5" fill="#94793a">reachable only through zone 3</text>
+
+  <!-- trust boundary markers -->
+  <g stroke="#98a2b3" stroke-width="1.2" stroke-dasharray="5 5">
+    <line x1="244" y1="78" x2="244" y2="702"/>
+    <line x1="444" y1="78" x2="444" y2="702"/>
+    <line x1="904" y1="78" x2="904" y2="702"/>
+  </g>
+  <g font-size="9.5" fill="#98a2b3" text-anchor="middle">
+    <text x="244" y="726">trust boundary 1</text>
+    <text x="444" y="726">trust boundary 2</text>
+    <text x="904" y="726">trust boundary 3</text>
+  </g>
+
+  <!-- ═══════════ Zone 1 boxes ═══════════ -->
+  <rect x="40" y="150" width="168" height="92" rx="7" fill="#ffffff" stroke="#67a56a"/>
+  <text x="124" y="172" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">Web browser</text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="124" y="190">React + TypeScript SPA</text>
+    <text x="124" y="205">HttpOnly session cookie</text>
+    <text x="124" y="220">CSRF cookie (readable)</text>
+  </g>
+
+  <rect x="40" y="282" width="168" height="60" rx="7" fill="#ffffff" stroke="#67a56a"/>
+  <text x="124" y="304" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">API client</text>
+  <text x="124" y="322" text-anchor="middle" font-size="10.5" fill="#475467">curl · scripts · same JSON API</text>
+
+  <!-- ═══════════ Zone 2 box ═══════════ -->
+  <rect x="280" y="176" width="128" height="104" rx="7" fill="#ffffff" stroke="#5f94cf"/>
+  <text x="344" y="200" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">Caddy</text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="344" y="219">TLS 1.3 termination</text>
+    <text x="344" y="234">HSTS header</text>
+    <text x="344" y="249">only published port</text>
+    <text x="344" y="264">(443)</text>
+  </g>
+
+  <!-- ═══════════ Zone 3 pipeline ═══════════ -->
+  <rect x="484" y="130" width="250" height="94" rx="7" fill="#ffffff" stroke="#8b74c9"/>
+  <text x="609" y="151" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">API layer <tspan font-weight="400" fill="#63549b">internal/api</tspan></text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="609" y="169">CSP + security headers · request IDs</text>
+    <text x="609" y="184">CSRF double-submit · session check</text>
+    <text x="609" y="199">strict JSON schemas · size caps</text>
+    <text x="609" y="214">uniform errors, fail closed</text>
+  </g>
+
+  <rect x="484" y="252" width="250" height="76" rx="7" fill="#ffffff" stroke="#8b74c9"/>
+  <text x="609" y="273" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">Authentication <tspan font-weight="400" fill="#63549b">internal/auth</tspan></text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="609" y="291">Argon2id · opaque hashed sessions</text>
+    <text x="609" y="306">throttling · timing-equalized errors</text>
+  </g>
+
+  <rect x="484" y="356" width="250" height="70" rx="7" fill="#f8f5ff" stroke="#5b3fa8" stroke-width="2.2"/>
+  <text x="609" y="378" text-anchor="middle" font-size="12.5" font-weight="700" fill="#3c2a72">authz.Can — the choke point</text>
+  <g font-size="10.5" fill="#5b4c8c" text-anchor="middle">
+    <text x="609" y="396">deny by default · owner / editor / viewer</text>
+    <text x="609" y="411">admin role ⇏ file access</text>
+  </g>
+
+  <rect x="484" y="454" width="250" height="74" rx="7" fill="#ffffff" stroke="#8b74c9"/>
+  <text x="609" y="475" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">File service <tspan font-weight="400" fill="#63549b">internal/files</tspan></text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="609" y="493">filename sanitizing · MIME + magic bytes</text>
+    <text x="609" y="508">dedup + ref-count transactions</text>
+  </g>
+
+  <rect x="484" y="556" width="250" height="108" rx="7" fill="#ffffff" stroke="#8b74c9"/>
+  <text x="609" y="577" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">Storage engine <tspan font-weight="400" fill="#63549b">internal/storage</tspan></text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="609" y="595">SHA-256 content identity (dedup)</text>
+    <text x="609" y="610">AES-256-GCM · per-file DEK · hash as AAD</text>
+    <text x="609" y="625">atomic write: tmp + fsync + rename</text>
+    <text x="609" y="640">verify before release · never serves</text>
+    <text x="609" y="655">corrupt bytes</text>
+  </g>
+
+  <!-- audit logger -->
+  <rect x="756" y="356" width="112" height="118" rx="7" fill="#ffffff" stroke="#8b74c9"/>
+  <text x="812" y="378" text-anchor="middle" font-size="12" font-weight="700" fill="#101828">Audit</text>
+  <text x="812" y="393" text-anchor="middle" font-size="12" font-weight="700" fill="#101828">logger</text>
+  <g font-size="10" fill="#475467" text-anchor="middle">
+    <text x="812" y="412">every denial,</text>
+    <text x="812" y="426">every integrity</text>
+    <text x="812" y="440">failure, every</text>
+    <text x="812" y="454">lifecycle event</text>
+  </g>
+
+  <!-- ═══════════ Zone 4 boxes ═══════════ -->
+  <rect x="940" y="130" width="260" height="180" rx="7" fill="#ffffff" stroke="#d5a339"/>
+  <text x="1070" y="152" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">PostgreSQL 16</text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="1070" y="172">users — Argon2id PHC hashes</text>
+    <text x="1070" y="188">sessions — SHA-256 token hashes</text>
+    <text x="1070" y="204">nodes + grants — sharing model</text>
+    <text x="1070" y="220">blobs — wrapped DEKs, ref counts</text>
+    <text x="1070" y="236">login_failures — throttle window</text>
+    <text x="1070" y="258" fill="#94793a">parameterized queries only (pgx)</text>
+    <text x="1070" y="274" fill="#94793a">schema via embedded migrations</text>
+  </g>
+
+  <rect x="940" y="340" width="260" height="80" rx="7" fill="#ffffff" stroke="#d5a339"/>
+  <text x="1070" y="362" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">Audit log</text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="1070" y="381">audit_events — append-only</text>
+    <text x="1070" y="397">actor · action · target · result · reason</text>
+  </g>
+
+  <rect x="940" y="452" width="260" height="120" rx="7" fill="#ffffff" stroke="#d5a339"/>
+  <text x="1070" y="474" text-anchor="middle" font-size="12.5" font-weight="700" fill="#101828">Encrypted blob store</text>
+  <g font-size="10.5" fill="#475467" text-anchor="middle">
+    <text x="1070" y="494">objects/&lt;hh&gt;/&lt;sha-256&gt;.obj</text>
+    <text x="1070" y="510">AES-256-GCM ciphertext + tag</text>
+    <text x="1070" y="526">named by content hash —</text>
+    <text x="1070" y="542">user input never forms a path</text>
+    <text x="1070" y="562" fill="#94793a">plaintext never touches disk</text>
+  </g>
+
+  <rect x="940" y="600" width="260" height="88" rx="7" fill="none" stroke="#b54708" stroke-width="1.6" stroke-dasharray="6 4"/>
+  <text x="1070" y="624" text-anchor="middle" font-size="12.5" font-weight="700" fill="#b54708">Master key (KEK)</text>
+  <g font-size="10.5" fill="#93531c" text-anchor="middle">
+    <text x="1070" y="643">environment variable → process memory</text>
+    <text x="1070" y="659">wraps every per-file DEK; never in</text>
+    <text x="1070" y="675">code, database, logs, or on disk</text>
+  </g>
+
+  <!-- ═══════════ Flows ═══════════ -->
+  <g stroke="#475467" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+    <path d="M 208 196 L 278 210"/>                                <!-- browser -> caddy -->
+    <path d="M 208 312 L 278 258"/>                                <!-- api client -> caddy -->
+    <path d="M 408 214 L 482 190"/>                                <!-- caddy -> api -->
+    <path d="M 609 224 L 609 250"/>                                <!-- api -> auth -->
+    <path d="M 609 328 L 609 354"/>                                <!-- auth -> authz -->
+    <path d="M 609 426 L 609 452"/>                                <!-- authz -> files -->
+    <path d="M 609 528 L 609 554"/>                                <!-- files -> storage -->
+    <path d="M 734 278 L 938 200"/>                                <!-- auth -> postgres -->
+    <path d="M 734 514 L 896 514 L 896 300 L 938 300"/>            <!-- files -> postgres (elbow around audit box) -->
+    <path d="M 734 616 L 938 522"/>                                <!-- storage -> blob store -->
+    <path d="M 734 330 L 754 380"/>                                <!-- auth -> audit -->
+    <path d="M 734 496 L 754 452"/>                                <!-- files -> audit -->
+    <path d="M 868 400 L 938 386"/>                                <!-- audit logger -> audit log -->
+  </g>
+  <g font-size="10" fill="#475467">
+    <text x="216" y="184">HTTPS</text>
+    <text x="412" y="238">HTTP · internal</text>
+    <text x="412" y="251">network only</text>
+    <text x="795" y="238" transform="rotate(-21 795 238)">sessions · users (SQL)</text>
+    <text x="762" y="529">metadata + wrapped DEKs</text>
+    <text x="790" y="595" transform="rotate(-24 790 595)">ciphertext only</text>
+  </g>
+
+  <!-- caption -->
+  <text x="620" y="768" text-anchor="middle" font-size="11" fill="#667085">Every file-touching request passes the highlighted choke point; denials become 404s to the client and rows in the audit log. The KEK crosses no trust boundary.</text>
+  <text x="620" y="786" text-anchor="middle" font-size="10" fill="#98a2b3">SecureVault · docs/architecture-diagram.svg · see docs/architecture.md for the narrated version</text>
+</svg>

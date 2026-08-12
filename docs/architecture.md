@@ -9,6 +9,13 @@ grader would probe, so any team member can defend any component
 
 The deployment mirrors the proposal's four zones (§5.1, Figure 1):
 
+![SecureVault logical architecture](architecture-diagram.svg)
+
+*Report-ready versions: [architecture-diagram.svg](architecture-diagram.svg)
+(vector, embeds crisply in Word/Docs) and
+[architecture-diagram.png](architecture-diagram.png) (raster fallback).
+The ASCII rendering below carries the same structure for terminal readers:*
+
 ```
 ┌─ Zone 1: Untrusted client ──────────────────────────────────────────┐
 │  Browser (React SPA) / any HTTP client                              │
