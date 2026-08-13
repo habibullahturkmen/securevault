@@ -1,0 +1,27 @@
+SecureVault integrity-attack demonstration (proposal §7, 'Integrity attack')
+commit: aad9204  date: 2026-08-13T17:37Z
+
+## 1. Register + login + upload
+{"id":"1e0ea16f-7180-4fba-9cac-2dca562c5f72","username":"tamperdemo1786642663","role":"user"}
+
+{"id":"7aa247c9-fdd3-46a1-a47d-1fa4c6f10b2e","name":"secret.txt","mimeType":"text/plain","size":37,"owner":"tamperdemo1786642663","myRole":"owner","createdAt":"2026-08-13T13:37:44.098383-04:00","updatedAt":"2026-08-13T13:37:44.098383-04:00"}
+
+## 2. Download before tampering (succeeds, bytes verified)
+confidential payroll data 1786642664
+
+
+## 3. Attacker with disk access flips ONE byte of the stored ciphertext
+target object: data/objects/1b/1b1008079fdcab6beaa998c63815150447b76f9543b7f1bd4de91815bfca7cd9.obj (named by content hash — filename reveals nothing)
+byte at offset 100 XOR'd
+
+## 4. Download after tampering — blocked with a controlled error, no plaintext
+{"error":"stored object failed integrity verification"}
+
+HTTP status: 500
+
+## 5. The attack is recorded in the audit log
+                at                |      actor_name      |    action     | result |      reason       
+----------------------------------+----------------------+---------------+--------+-------------------
+ 2026-08-13 22:07:44.224222+04:30 | tamperdemo1786642663 | file.download | error  | integrity_failure
+(1 row)
+

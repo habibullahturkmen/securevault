@@ -606,8 +606,10 @@ func TestSecurityHeadersPresent(t *testing.T) {
 	resp.Body.Close()
 
 	for header, want := range map[string]string{
-		"X-Content-Type-Options": "nosniff",
-		"Referrer-Policy":        "no-referrer",
+		"X-Content-Type-Options":       "nosniff",
+		"Referrer-Policy":              "no-referrer",
+		"Cross-Origin-Embedder-Policy": "require-corp",
+		"Permissions-Policy":           "camera=(), microphone=(), geolocation=()",
 	} {
 		if got := resp.Header.Get(header); got != want {
 			t.Errorf("%s = %q, want %q", header, got, want)
