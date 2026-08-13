@@ -32,4 +32,7 @@ COPY --from=build --chown=65532:65532 /data-skel /data
 VOLUME ["/data"]
 ENV DATA_DIR=/data LISTEN_ADDR=0.0.0.0:8080 ENV=prod
 EXPOSE 8080
+# The :nonroot base already defaults to uid 65532; stated explicitly so the
+# no-root guarantee is visible in this file and checkable by scanners.
+USER nonroot:nonroot
 ENTRYPOINT ["/securevault"]

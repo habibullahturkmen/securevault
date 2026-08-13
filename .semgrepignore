@@ -1,0 +1,12 @@
+# Paths Semgrep must not scan (used by CI and `make check`).
+# NOTE: this file REPLACES semgrep's default ignore list, so the defaults
+# we still want are restated here.
+.git/
+bin/
+data/
+web/node_modules/
+web/dist/
+web/pnpm-lock.yaml
+# Captured scan artifacts (e.g. the ZAP HTML report legitimately contains
+# http:// links to the scanned localhost target) — evidence, not code.
+docs/evidence/

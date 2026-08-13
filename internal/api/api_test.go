@@ -584,6 +584,9 @@ func TestSessionHygiene(t *testing.T) {
 	// Logout, then replay the old cookie: must be rejected.
 	c.req("POST", "/api/auth/logout", nil, "", http.StatusOK)
 	req, _ := http.NewRequest("GET", c.base+"/api/auth/me", nil)
+	// Attacker-side test fixture: replaying a stolen token value, so no
+	// client cookie flags apply (the server sets the real flags).
+	// nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure, go.lang.security.audit.net.cookie-missing-httponly.cookie-missing-httponly
 	req.AddCookie(&http.Cookie{Name: sessionCookie, Value: cookieVal})
 	resp, err = c.http.Do(req)
 	if err != nil {

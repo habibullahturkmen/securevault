@@ -101,6 +101,10 @@ func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
 		mime.FormatMediaType("attachment", map[string]string{"filename": node.Name}))
 	w.Header().Set("Content-Length", strconv.FormatInt(int64(len(plain)), 10))
 	w.Header().Set("Cache-Control", "no-store")
+	// Verified file bytes served as a download, never a rendered page:
+	// attachment disposition + nosniff (middleware) close the XSS vector
+	// the rule guards against. HTML escaping would corrupt the file.
+	// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 	w.Write(plain)
 }
 

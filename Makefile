@@ -38,6 +38,7 @@ vet:
 check: vet race
 	@command -v gitleaks >/dev/null && gitleaks detect --no-banner || echo "gitleaks not installed — skipping (CI still runs it)"
 	@command -v semgrep >/dev/null && semgrep scan --config auto --error || echo "semgrep not installed — skipping (CI still runs it)"
+# .semgrepignore governs which paths both the line above and CI scan.
 
 ## genkey: generate a 32-byte hex master key for .env
 genkey:

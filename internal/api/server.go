@@ -121,6 +121,9 @@ func (s *Server) spaHandler() http.Handler {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
+		// index is the compiled, embedded index.html — a build artifact,
+		// never user data, so no output encoding applies here.
+		// nosemgrep: go.lang.security.audit.xss.no-direct-write-to-responsewriter.no-direct-write-to-responsewriter
 		w.Write(index)
 	})
 }
@@ -137,6 +140,9 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 // --- cookies ---
 
 func (s *Server) setSessionCookies(w http.ResponseWriter, token string) error {
+	// Secure is set for every non-dev build; the rule cannot see through
+	// the `!s.devMode` conditional (dev = plain-HTTP localhost only).
+	// nosemgrep: go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/",
 		HttpOnly: true, Secure: !s.devMode, SameSite: http.SameSiteStrictMode,
@@ -147,6 +153,11 @@ func (s *Server) setSessionCookies(w http.ResponseWriter, token string) error {
 	if _, err := rand.Read(buf); err != nil {
 		return err
 	}
+	// The CSRF cookie is deliberately NOT HttpOnly: the double-submit
+	// pattern requires the same-origin SPA to read it and echo it in the
+	// X-CSRF-Token header. It carries no session authority. Secure is set
+	// outside dev mode as above.
+	// nosemgrep: go.lang.security.audit.net.cookie-missing-httponly.cookie-missing-httponly, go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 	http.SetCookie(w, &http.Cookie{
 		Name: csrfCookie, Value: base64.RawURLEncoding.EncodeToString(buf), Path: "/",
 		HttpOnly: false, Secure: !s.devMode, SameSite: http.SameSiteStrictMode,
@@ -157,6 +168,9 @@ func (s *Server) setSessionCookies(w http.ResponseWriter, token string) error {
 
 func (s *Server) clearSessionCookies(w http.ResponseWriter) {
 	for _, name := range []string{sessionCookie, csrfCookie} {
+		// Expired empty deletion cookies; flags mirror the originals
+		// (session HttpOnly, CSRF readable), Secure outside dev mode.
+		// nosemgrep: go.lang.security.audit.net.cookie-missing-httponly.cookie-missing-httponly, go.lang.security.audit.net.cookie-missing-secure.cookie-missing-secure
 		http.SetCookie(w, &http.Cookie{
 			Name: name, Value: "", Path: "/", MaxAge: -1,
 			HttpOnly: name == sessionCookie, Secure: !s.devMode,
