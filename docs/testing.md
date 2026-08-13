@@ -125,3 +125,10 @@ cookie jars per principal. `TestValidLifecycle`, `TestEndpointRoleMatrix`,
 - **Scan reports**: Semgrep/gitleaks output from the CI run logs; ZAP HTML
   report artifact from the manual workflow (see
   [operations.md](operations.md) §5).
+- **Architecture figure**: use
+  [architecture-diagram.svg](architecture-diagram.svg) (vector — preferred;
+  Word and Google Docs embed it crisply) or
+  [architecture-diagram.png](architecture-diagram.png) as the report's
+  logical-architecture figure; it matches the built system, with the
+  narrated walkthrough in [architecture.md](architecture.md) §1 to draw
+  captions from.
