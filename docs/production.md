@@ -94,45 +94,92 @@ browser ──HTTPS──▶ caddy (TLS 1.3)                [edge + internal net
 
 [Coolify](https://coolify.io) runs its own reverse proxy (Traefik by
 default, optionally Caddy) that terminates TLS and obtains certificates, so
-the repository's Caddy service is not needed there.
-`docker-compose.coolify.yml` is the same stack minus Caddy: the app
-and PostgreSQL, with the app published only through Coolify's proxy.
+the repository's Caddy service is not needed there. The app is deployed as
+a plain **Dockerfile application** from `deploy/Dockerfile`, and PostgreSQL
+as a Coolify-managed database resource next to it — no Compose file
+involved. Both land on the same Docker network, which is the "internal"
+zone of the Compose stack above.
 
-1. Push the repository to GitHub (or any Git host Coolify can reach).
-2. In Coolify: **Project → New Resource → Docker Compose**, pick the Git
-   repository and branch, then set
-   - **Base Directory:** `/`
-   - **Docker Compose Location:** `/docker-compose.coolify.yml`
-3. Coolify parses the file and shows the `app` service. Give it a domain
-   (`https://vault.example.com`) — the `SERVICE_FQDN_APP_8080` magic
-   variable in the compose file routes that domain to the app's port 8080
-   and the proxy handles the certificate. Point the domain's DNS at the
-   Coolify server first.
-4. Under **Environment Variables**, set `SECUREVAULT_MASTER_KEY` to the
-   output of `make genkey` (run locally). Coolify fills
-   `SERVICE_PASSWORD_POSTGRES` itself and hands the same value to both
-   services. Back the master key up somewhere outside Coolify — losing it
-   means losing every stored file (see [operations.md](operations.md)).
-5. **Deploy.** Coolify builds `deploy/Dockerfile` (frontend, then the Go
-   binary with the UI embedded), starts Postgres, waits for its health
-   check, then starts the app, which applies migrations on boot.
+### 1. PostgreSQL
+
+**Project → New Resource → Database → PostgreSQL** (version 16). Leave
+"Make it publicly available" **off** — the database should be reachable
+only from the Coolify network. After it starts, copy the **internal**
+connection URL shown on the database page; it has the form
+
+```
+postgres://<user>:<password>@<container-name>:5432/<database>
+```
+
+### 2. The application
+
+**Project → New Resource → Application → Public/Private Repository**,
+pick the repository and branch, then:
+
+| Setting | Value |
+|---|---|
+| Build Pack | **Dockerfile** |
+| Base Directory | `/` (the Dockerfile copies `web/`, `cmd/`, `internal/` from the repo root) |
+| Dockerfile Location | `/deploy/Dockerfile` |
+| Ports Exposes | `8080` |
+| Domain | `https://vault.example.com` — point its DNS at the Coolify host first |
+
+**Environment Variables** (mark both as build-time *off*; they are
+runtime-only):
+
+| Variable | Value |
+|---|---|
+| `SECUREVAULT_MASTER_KEY` | output of `make genkey`, run locally. **Back it up outside Coolify** — losing it loses every stored file (see [operations.md](operations.md)). |
+| `DATABASE_URL` | the internal URL copied in step 1 |
+
+`ENV=prod`, `LISTEN_ADDR=0.0.0.0:8080` and `DATA_DIR=/data` are already
+baked into the image; nothing else is required.
+
+**Persistent Storage → Add → Volume Mount**, destination `/data`. Use a
+named *volume* mount, not a host-directory bind: the image ships `/data`
+owned by the distroless `nonroot` user (uid 65532) and a fresh named volume
+inherits that ownership, whereas a bind-mounted host directory would be
+root-owned and the nonroot process could not write to it.
+
+**Healthcheck:** turn Coolify's built-in health check **off** for this
+resource. It runs `curl`/`wget` *inside* the container, and the distroless
+image deliberately has neither — with it on, Coolify would report the app
+unhealthy forever and rolling deploys would never switch over. The proxy
+still only routes to a running container.
+
+**Deploy.** Coolify builds the image (frontend, then the Go binary with the
+UI embedded), starts it, and the app applies migrations against the managed
+Postgres on boot. Watch the deploy log for
+`"msg":"migrations up to date"` followed by `"msg":"listening"`.
+
+### 3. First admin
 
 The first user to register is a normal user; promote an admin with the SQL
-in [development.md](development.md) through Coolify's database terminal
-(`docker exec` into the `db` container) or by connecting to Postgres from
-the app's network.
+in [development.md](development.md) through the database resource's
+terminal in Coolify (or `docker exec -it <pg-container> psql -U <user>
+<database>` on the host).
 
-Security properties carried over:
+### Security properties carried over
 
-- `ENV=prod` is fixed in the compose file: cookies are `Secure`, and the
-  app emits HSTS along with its other security headers, so nothing depends
-  on proxy configuration.
-- No `ports:` are published; the app is reachable only through the proxy,
-  the database only from the app.
-- The blob store and Postgres data are named volumes that survive
-  redeploys. Include both in backups (see [operations.md](operations.md)).
+- Cookies are `Secure` and HSTS is emitted by the app (`ENV=prod` is set
+  in the Dockerfile), so nothing depends on proxy configuration.
+- No host ports are published; the app is reachable only through the
+  proxy, the database only from the Coolify network.
+- The blob-store volume and the Postgres data survive redeploys. Include
+  both in backups (see [operations.md](operations.md)); Coolify can schedule
+  Postgres backups on the database resource.
 - If Coolify's "force HTTPS" redirect is available for the resource, turn
   it on; HSTS then makes it sticky for returning browsers.
+
+### Alternative: one Compose resource
+
+`docker-compose.coolify.yml` at the repository root bundles app + Postgres
+into a single **Docker Compose** resource (Base Directory `/`, Docker
+Compose Location `/docker-compose.coolify.yml`). Set
+`SECUREVAULT_MASTER_KEY` under Environment Variables; Coolify fills
+`SERVICE_PASSWORD_POSTGRES` and routes the domain you assign to the `app`
+service via `SERVICE_FQDN_APP_8080`. Same image, same security properties —
+use whichever fits how you manage the server.
 
 ## CI security gates
 
