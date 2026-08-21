@@ -104,7 +104,9 @@ cookie jars per principal. `TestValidLifecycle`, `TestEndpointRoleMatrix`,
 `TestSessionHygiene`, `TestSecurityHeadersPresent`,
 `TestMalformedInputRejected` (unknown fields, bad UUIDs, oversized JSON),
 `TestRegistrationClosed`, `TestInviteFlowOverHTTP` (status endpoint, 403s,
-admin issue/list/revoke with CSRF, non-admin 404s, code never listed).
+admin issue/list/revoke with CSRF, non-admin 404s, code never listed),
+`TestAuditPagination` (keyset walk: newest-first, no overlaps or gaps,
+parameter validation).
 
 ## Writing new tests — house rules
 

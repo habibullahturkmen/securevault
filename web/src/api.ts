@@ -46,6 +46,7 @@ export interface Invite {
 }
 
 export interface AuditEvent {
+  id: number
   at: string
   actor: string
   action: string
@@ -115,7 +116,12 @@ export const api = {
       'GET',
       '/api/admin/users',
     ),
-  adminAudit: () => request<{ events: AuditEvent[] }>('GET', '/api/admin/audit?limit=200'),
+  // Keyset paging: pass the previous page's nextBefore to get older events.
+  adminAudit: (limit: number, before?: number | null) =>
+    request<{ events: AuditEvent[]; nextBefore: number | null }>(
+      'GET',
+      `/api/admin/audit?limit=${limit}${before ? `&before=${before}` : ''}`,
+    ),
   adminInvites: () => request<{ invites: Invite[] }>('GET', '/api/admin/invites'),
   adminCreateInvite: (note: string, ttlHours: number) =>
     request<{ code: string; invite: Invite }>('POST', '/api/admin/invites', { note, ttlHours }),

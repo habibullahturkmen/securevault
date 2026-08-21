@@ -115,6 +115,7 @@ export default function VaultView({ user, onLogout }: { user: User; onLogout: ()
             )}
           </div>
 
+          <div className="table-wrap">
           <table className="files">
             <thead>
               <tr>
@@ -136,8 +137,8 @@ export default function VaultView({ user, onLogout }: { user: User; onLogout: ()
               )}
               {files.map((f) => (
                 <tr key={f.id}>
-                  <td>{f.name}</td>
-                  <td>{f.owner}</td>
+                  <td className="cell-ellipsis cell-name" title={f.name}>{f.name}</td>
+                  <td className="cell-ellipsis" title={f.owner}>{f.owner}</td>
                   <td>
                     <span className={`role role-${f.myRole}`}>{f.myRole}</span>
                   </td>
@@ -169,6 +170,7 @@ export default function VaultView({ user, onLogout }: { user: User; onLogout: ()
               ))}
             </tbody>
           </table>
+          </div>
         </>
       )}
 

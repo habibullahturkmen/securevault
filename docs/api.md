@@ -176,9 +176,13 @@ account and audit review only.
 ### GET /api/admin/users
 `200 {"users": [{"id","username","role","createdAt"}, …]}`.
 
-### GET /api/admin/audit?limit=N
-`200 {"events": [{"at","actor","action","target","result","reason","requestId"}, …]}`,
-newest first. `limit` 1–1000, default 200.
+### GET /api/admin/audit?limit=N&before=ID
+`200 {"events": [{"id","at","actor","action","target","result","reason","requestId"}, …], "nextBefore": ID|null}`,
+newest first. `limit` 1–1000 (default 50). Paging is keyset on the
+append-only event `id`: pass a page's `nextBefore` as `before` to get the
+next older page; `null` means there is nothing older. Keyset paging stays
+consistent while new events keep arriving. `400` for an out-of-range
+`limit` or a non-positive `before`.
 
 Actions currently emitted: `auth.register`, `auth.login`, `auth.logout`,
 `auth.password_change`, `file.upload`, `file.view`, `file.download`,
