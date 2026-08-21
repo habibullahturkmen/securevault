@@ -24,6 +24,27 @@ export interface ShareGrant {
   role: 'editor' | 'viewer'
 }
 
+// What the sign-up form may learn about the registration policy.
+export interface RegistrationStatus {
+  mode: 'open' | 'invite' | 'closed'
+  acceptingRegistrations: boolean
+  inviteRequired: boolean
+}
+
+// An issued invite as listed to admins; the code itself is shown once at
+// creation and never again.
+export interface Invite {
+  id: string
+  note: string
+  createdBy: string
+  createdAt: string
+  expiresAt: string
+  usedBy: string
+  usedAt: string | null
+  revokedAt: string | null
+  status: 'active' | 'used' | 'revoked' | 'expired'
+}
+
 export interface AuditEvent {
   at: string
   actor: string
@@ -66,8 +87,13 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const api = {
   me: () => request<User>('GET', '/api/auth/me'),
-  register: (username: string, password: string) =>
-    request<User>('POST', '/api/auth/register', { username, password }),
+  registrationStatus: () => request<RegistrationStatus>('GET', '/api/auth/registration'),
+  register: (username: string, password: string, inviteCode?: string) =>
+    request<User>(
+      'POST',
+      '/api/auth/register',
+      inviteCode ? { username, password, inviteCode } : { username, password },
+    ),
   login: (username: string, password: string) =>
     request<User>('POST', '/api/auth/login', { username, password }),
   logout: () => request<{ status: string }>('POST', '/api/auth/logout'),
@@ -90,6 +116,11 @@ export const api = {
       '/api/admin/users',
     ),
   adminAudit: () => request<{ events: AuditEvent[] }>('GET', '/api/admin/audit?limit=200'),
+  adminInvites: () => request<{ invites: Invite[] }>('GET', '/api/admin/invites'),
+  adminCreateInvite: (note: string, ttlHours: number) =>
+    request<{ code: string; invite: Invite }>('POST', '/api/admin/invites', { note, ttlHours }),
+  adminRevokeInvite: (id: string) =>
+    request<{ status: string }>('DELETE', `/api/admin/invites/${id}`),
 }
 
 // upload uses XHR for real progress events; fetch cannot report them.

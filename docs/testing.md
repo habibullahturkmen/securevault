@@ -71,6 +71,11 @@ real Argon2id cost (64 MiB, t=3). That slowness is itself a control working.
 - `TestRegisterLoginLogoutLifecycle`, `TestRegistrationPolicy` — happy path
   and policy edges (short names, uppercase, traversal chars, short password,
   duplicates).
+- `TestParseRegistrationMode`, `TestBootstrapIgnoresClosedMode`,
+  `TestInviteLifecycle` (no code / wrong code / sloppy re-typed code /
+  single use / revoked / expired / non-admin issuance / plaintext never
+  stored), `TestMaxUsersEnforced`, `TestRegistrationDenialsAreAudited` —
+  the registration policy (`REGISTRATION_MODE`, `MAX_USERS`).
 - `TestUniformCredentialErrors`, `TestThrottlingAfterRepeatedFailures`
   (correct password still throttled once tripped), `TestAddressThrottling`
   (username spraying), `TestSessionRotationOnLogin`,
@@ -97,7 +102,9 @@ cookie jars per principal. `TestValidLifecycle`, `TestEndpointRoleMatrix`,
 `TestTypeSpoofingRejected`, `TestTraversalFilenameNeutralized`,
 `TestOversizedUploadRejected`, `TestIntegrityAttack`, `TestDeduplication`,
 `TestSessionHygiene`, `TestSecurityHeadersPresent`,
-`TestMalformedInputRejected` (unknown fields, bad UUIDs, oversized JSON).
+`TestMalformedInputRejected` (unknown fields, bad UUIDs, oversized JSON),
+`TestRegistrationClosed`, `TestInviteFlowOverHTTP` (status endpoint, 403s,
+admin issue/list/revoke with CSRF, non-admin 404s, code never listed).
 
 ## Writing new tests — house rules
 

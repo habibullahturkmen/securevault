@@ -344,3 +344,62 @@ button.danger:hover {
 .denied-row td {
   background: #fdf3f2;
 }
+
+/* --- invites --- */
+
+p.small,
+.muted.small {
+  font-size: 0.8rem;
+  margin: 0.25rem 0 0.75rem;
+}
+
+.invite-form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.invite-form input {
+  flex: 1 1 16rem;
+}
+
+.invite-code {
+  border: 1px solid var(--accent);
+  background: #f4f7ff;
+  border-radius: 6px;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.invite-code code {
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  user-select: all;
+}
+
+.invite-code-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.invite-active {
+  background: #e6f4ea;
+  color: var(--ok);
+}
+
+.invite-used {
+  background: #e3edff;
+  color: var(--accent-dark);
+}
+
+.invite-revoked,
+.invite-expired {
+  background: #f1f1f4;
+  color: var(--muted);
+}
+
+button.danger-link {
+  color: var(--danger);
+}

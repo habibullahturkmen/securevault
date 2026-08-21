@@ -51,6 +51,28 @@ button) or via `GET /api/admin/users` / `GET /api/admin/audit`. They cannot
 read, share, or delete anyone's files — verify anytime by trying (expect
 404s; each attempt lands in the audit log, which is the point).
 
+### Controlling who can register
+
+`REGISTRATION_MODE` (see [production.md](production.md)) is the switch:
+
+- `open` — anyone; development only.
+- `invite` — the recommended setting for a reachable deployment. In the
+  admin UI, **Invites → Generate invite** (optional note, lifetime 1–30
+  days) shows a one-time code **once**; hand it to the person, who enters
+  it on the sign-up form. Codes are single-use, expire, and can be revoked
+  from the same table while still active. Each issue/revoke/redeem is
+  audited (`invite.create`, `invite.revoke`, `invite.redeem`).
+- `closed` — no sign-ups at all; flip to `invite` when needed.
+
+`MAX_USERS=N` caps the account count regardless of mode. In every mode the
+first account on an empty database may register (bootstrap) so a fresh
+deployment is never locked out: register it, promote it with the SQL above,
+then it issues invites for everyone else. Denied attempts show up as
+`auth.register denied` with reasons `registration_closed`,
+`invite_required`, `invite_invalid`, or `user_limit` — a burst of
+`invite_invalid` from one actor is someone guessing codes (128-bit, so
+futile, but worth a look).
+
 Removing an account is a manual decision:
 `DELETE FROM users WHERE username='...'` cascades to their sessions, nodes,
 and grants; blob reference counts are **not** auto-decremented by the

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -28,7 +29,13 @@ type Config struct {
 	MasterKey      []byte
 	MaxUploadBytes int64
 	Dev            bool
+	// RegistrationMode is open (default), invite, or closed; MaxUsers caps
+	// the number of accounts (0 = unlimited). See internal/auth/registration.go.
+	RegistrationMode string
+	MaxUsers         int64
 }
+
+var registrationModes = map[string]bool{"open": true, "invite": true, "closed": true}
 
 // Load reads configuration from the environment and validates it.
 // It fails closed: a missing or malformed master key is a startup error,
@@ -65,6 +72,18 @@ func Load() (*Config, error) {
 			return nil, errors.New("MAX_UPLOAD_BYTES must be a positive integer")
 		}
 		cfg.MaxUploadBytes = n
+	}
+
+	cfg.RegistrationMode = strings.ToLower(envOr("REGISTRATION_MODE", "open"))
+	if !registrationModes[cfg.RegistrationMode] {
+		return nil, errors.New("REGISTRATION_MODE must be open, invite, or closed")
+	}
+	if v := os.Getenv("MAX_USERS"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 0 {
+			return nil, errors.New("MAX_USERS must be a non-negative integer (0 = unlimited)")
+		}
+		cfg.MaxUsers = n
 	}
 
 	return cfg, nil

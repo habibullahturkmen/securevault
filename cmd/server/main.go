@@ -57,6 +57,11 @@ func run(logger *slog.Logger) error {
 
 	auditLog := audit.New(pool, logger)
 	authSvc := auth.NewService(pool, auditLog)
+	mode, err := auth.ParseRegistrationMode(cfg.RegistrationMode)
+	if err != nil {
+		return err
+	}
+	authSvc.SetRegistrationPolicy(auth.RegistrationPolicy{Mode: mode, MaxUsers: cfg.MaxUsers})
 	repo := files.NewRepo(pool, store, auditLog, cfg.MaxUploadBytes)
 
 	ui := webui.FS()
@@ -72,6 +77,7 @@ func run(logger *slog.Logger) error {
 		IdleTimeout:       2 * time.Minute,
 	}
 
-	logger.Info("listening", "addr", cfg.ListenAddr, "dev", cfg.Dev, "embedded_ui", ui != nil)
+	logger.Info("listening", "addr", cfg.ListenAddr, "dev", cfg.Dev, "embedded_ui", ui != nil,
+		"registration", mode, "max_users", cfg.MaxUsers)
 	return srv.ListenAndServe()
 }

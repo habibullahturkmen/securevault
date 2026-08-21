@@ -43,7 +43,7 @@ func testService(t *testing.T) (*Service, *pgxpool.Pool) {
 	}
 	// Isolate from prior runs; each test also uses unique usernames.
 	if _, err := pool.Exec(ctx,
-		"TRUNCATE users, sessions, login_failures, audit_events CASCADE"); err != nil {
+		"TRUNCATE users, sessions, login_failures, invites, audit_events CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,7 +60,7 @@ func TestRegisterLoginLogoutLifecycle(t *testing.T) {
 	ctx := context.Background()
 	name := uniqueName("alice")
 
-	u, err := s.Register(ctx, name, "a strong passphrase")
+	u, err := s.Register(ctx, name, "a strong passphrase", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestUniformCredentialErrors(t *testing.T) {
 	ctx := context.Background()
 	name := uniqueName("bob")
 
-	if _, err := s.Register(ctx, name, "bobs real password"); err != nil {
+	if _, err := s.Register(ctx, name, "bobs real password", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -119,7 +119,7 @@ func TestThrottlingAfterRepeatedFailures(t *testing.T) {
 	ctx := context.Background()
 	name := uniqueName("carol")
 
-	if _, err := s.Register(ctx, name, "carols password"); err != nil {
+	if _, err := s.Register(ctx, name, "carols password", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,7 +158,7 @@ func TestSessionRotationOnLogin(t *testing.T) {
 	ctx := context.Background()
 	name := uniqueName("dave")
 
-	if _, err := s.Register(ctx, name, "daves password"); err != nil {
+	if _, err := s.Register(ctx, name, "daves password", ""); err != nil {
 		t.Fatal(err)
 	}
 	t1, _, err := s.Login(ctx, name, "daves password", "203.0.113.9")
@@ -179,7 +179,7 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	ctx := context.Background()
 	name := uniqueName("erin")
 
-	if _, err := s.Register(ctx, name, "erins old password"); err != nil {
+	if _, err := s.Register(ctx, name, "erins old password", ""); err != nil {
 		t.Fatal(err)
 	}
 	oldToken, u, err := s.Login(ctx, name, "erins old password", "203.0.113.10")
@@ -225,7 +225,7 @@ func TestExpiredSessionRejected(t *testing.T) {
 	ctx := context.Background()
 	name := uniqueName("frank")
 
-	if _, err := s.Register(ctx, name, "franks password"); err != nil {
+	if _, err := s.Register(ctx, name, "franks password", ""); err != nil {
 		t.Fatal(err)
 	}
 	token, u, err := s.Login(ctx, name, "franks password", "203.0.113.13")
@@ -255,16 +255,16 @@ func TestRegistrationPolicy(t *testing.T) {
 		{uniqueName("ok"), "short"},               // password too short
 	}
 	for _, c := range bad {
-		if _, err := s.Register(ctx, c.username, c.password); err == nil {
+		if _, err := s.Register(ctx, c.username, c.password, ""); err == nil {
 			t.Errorf("Register(%q, %q) succeeded, want policy error", c.username, c.password)
 		}
 	}
 
 	name := uniqueName("grace")
-	if _, err := s.Register(ctx, name, "graces password"); err != nil {
+	if _, err := s.Register(ctx, name, "graces password", ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Register(ctx, name, "another password"); !errors.Is(err, ErrUsernameTaken) {
+	if _, err := s.Register(ctx, name, "another password", ""); !errors.Is(err, ErrUsernameTaken) {
 		t.Errorf("duplicate username: %v, want ErrUsernameTaken", err)
 	}
 }
@@ -274,7 +274,7 @@ func TestAuditTrailForAuthEvents(t *testing.T) {
 	ctx := context.Background()
 	name := uniqueName("henry")
 
-	s.Register(ctx, name, "henrys password")
+	s.Register(ctx, name, "henrys password", "")
 	s.Login(ctx, name, "wrong password", "203.0.113.14")
 	s.Login(ctx, name, "henrys password", "203.0.113.14")
 

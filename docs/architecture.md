@@ -77,14 +77,16 @@ storage engine built and tested before any web code existed).
 
 ## 3. Database schema
 
-Defined in `internal/database/migrations/0001_init.sql`; migrations are
-embedded in the binary and applied automatically (see §6.4).
+Defined in `internal/database/migrations/` (`0001_init.sql`,
+`0002_invites.sql`); migrations are embedded in the binary and applied
+automatically (see §6.4).
 
 | Table | Purpose | Security-relevant columns |
 |---|---|---|
 | `users` | accounts | `password_hash` — Argon2id PHC string; `role` ∈ {user, admin} |
 | `sessions` | server-side sessions | `token_hash` — SHA-256 of the opaque cookie token; `expires_at` |
 | `login_failures` | throttling window | `key` — `u:<username>` or `ip:<addr>`; pruned opportunistically |
+| `invites` | one-time registration codes (`REGISTRATION_MODE=invite`) | `code_hash` — SHA-256 of the code, plaintext never stored; `expires_at`, `used_by`/`used_at`, `revoked_at` |
 | `blobs` | one row per unique content | `hash` (PK) — SHA-256 of *plaintext*; `wrapped_dek`; `ref_count` |
 | `nodes` | user-visible files | `owner_id`, `blob_hash` (FK), `display_name` — sanitized metadata, **never a path** |
 | `grants` | sharing | `(node_id, grantee_id)` PK; `role` ∈ {editor, viewer}; owners are implicit via `nodes.owner_id` |

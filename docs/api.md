@@ -57,15 +57,30 @@ Malformed request bodies (unknown JSON fields, trailing data, >16 KiB) →
 
 ## Authentication endpoints
 
+### GET /api/auth/registration
+`200 {"mode": "open"|"invite"|"closed", "acceptingRegistrations": bool, "inviteRequired": bool}`.
+No auth. Tells the sign-up form which fields to show; reveals the policy,
+never any account. On an empty database `acceptingRegistrations` is `true`
+in every mode (bootstrap, see below).
+
 ### POST /api/auth/register
-Body: `{"username": "...", "password": "..."}`
+Body: `{"username": "...", "password": "...", "inviteCode": "..."}` —
+`inviteCode` is optional and only consulted when the server runs with
+`REGISTRATION_MODE=invite` (case-insensitive; spaces and dashes ignored).
 Username: 3–32 chars, `[a-z0-9][a-z0-9_.-]*`. Password: 8–128 chars, no
 composition rules (NIST SP 800-63B). New accounts always get role `user`.
+
+Policy (`REGISTRATION_MODE`, `MAX_USERS`): the first account on an empty
+database is always admitted (bootstrap); after that `closed` refuses,
+`invite` needs an unused, unexpired, unrevoked code (consumed atomically
+with the insert), and `MAX_USERS` caps the total in any mode. Every denial
+is audited as `auth.register denied` with the reason.
 
 | Status | Meaning |
 |---|---|
 | 201 | `{"id","username","role"}` |
 | 400 | username or password policy violation (message says which) |
+| 403 | `registration is closed` / `an invite code is required to register` / `invite code is invalid, expired, or already used` / `the account limit has been reached` |
 | 409 | `username is already taken` |
 
 ### POST /api/auth/login
@@ -168,7 +183,27 @@ newest first. `limit` 1–1000, default 200.
 Actions currently emitted: `auth.register`, `auth.login`, `auth.logout`,
 `auth.password_change`, `file.upload`, `file.view`, `file.download`,
 `file.rename`, `file.delete`, `file.share`, `share.grant`, `share.revoke`,
-`admin.access`. Results: `ok`, `denied`, `error`.
+`invite.create`, `invite.revoke`, `invite.redeem`, `admin.access`.
+Results: `ok`, `denied`, `error`.
+
+### GET /api/admin/invites
+`200 {"invites": [{"id","note","createdBy","createdAt","expiresAt","usedBy","usedAt","revokedAt","status"}, …]}`,
+newest first (200 most recent). `status` is `active`, `used`, `revoked`, or
+`expired`. The code itself is never listed — like session tokens it is
+stored only as a SHA-256 hash.
+
+### POST /api/admin/invites — csrf
+Body: `{"note": "...", "ttlHours": N}` — both optional; `note` ≤ 64 chars,
+`ttlHours` 1–720 (default 168 = 7 days).
+
+| Status | Meaning |
+|---|---|
+| 201 | `{"code": "<26-char base32>", "invite": {…as above…}}` — the code appears in this response **only** |
+| 400 | lifetime or note out of range |
+
+### DELETE /api/admin/invites/{id} — csrf
+Revokes an active invite. `200 {"status":"revoked"}`; `404 invite not found`
+for unknown, malformed, used, or already-revoked ids.
 
 ## Cookie reference
 
