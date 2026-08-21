@@ -8,14 +8,11 @@
     "build": {
       "commands": [
         "cd web && npx --yes pnpm@11 install --frozen-lockfile && npx --yes pnpm@11 build",
-        "CGO_ENABLED=0 go build -tags embedui -trimpath -ldflags=\"-w -s\" -o out ./cmd/server"
+        "CGO_ENABLED=0 go build -tags embedui -trimpath -o out ./cmd/server"
       ]
     }
   },
   "deploy": {
-    "inputs": [
-      { "step": "build", "include": ["out"] }
-    ],
     "startCommand": "./out",
     "variables": {
       "LISTEN_ADDR": "0.0.0.0:8080",

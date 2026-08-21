@@ -106,8 +106,9 @@ zone of the Compose stack above.
 provider detects `go.mod` and brings Go 1.25 (via mise); `packages` adds
 Node 22; the overridden `build` step runs `pnpm install` and `pnpm build`
 in `web/` (pnpm fetched at the version pinned in `package.json`) and then
-`go build -tags embedui` so `web/dist` is embedded; only the static `out`
-binary is copied into the runtime image, which starts `./out`.
+`go build -tags embedui` so `web/dist` is embedded; the runtime image
+(Debian slim + curl/wget) starts `./out`. Commands in `railpack.json` are
+run through `sh -c '…'`, so avoid double quotes inside them.
 `LISTEN_ADDR=0.0.0.0:8080`, `DATA_DIR=/data` and `ENV=prod` are set as
 deploy variables there — the secrets are not.
 
