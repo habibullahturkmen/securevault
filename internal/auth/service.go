@@ -67,14 +67,18 @@ type Service struct {
 	pool       *pgxpool.Pool
 	audit      *audit.Logger
 	sessionTTL time.Duration
+	policy     RegistrationPolicy // see registration.go
 }
 
 func NewService(pool *pgxpool.Pool, auditLog *audit.Logger) *Service {
-	return &Service{pool: pool, audit: auditLog, sessionTTL: defaultSessionTTL}
+	return &Service{pool: pool, audit: auditLog, sessionTTL: defaultSessionTTL,
+		policy: RegistrationPolicy{Mode: RegistrationOpen}}
 }
 
-// Register creates a new account with the default user role.
-func (s *Service) Register(ctx context.Context, username, password string) (*User, error) {
+// Register creates a new account with the default user role, subject to the
+// registration policy (mode, invite code, user cap — see registration.go).
+// inviteCode is ignored unless the policy requires one.
+func (s *Service) Register(ctx context.Context, username, password, inviteCode string) (*User, error) {
 	if !usernameRe.MatchString(username) {
 		return nil, ErrUsernamePolicy
 	}
@@ -87,8 +91,21 @@ func (s *Service) Register(ctx context.Context, username, password string) (*Use
 		return nil, err
 	}
 
+	// Policy check, insert, and invite consumption are one transaction so a
+	// code can never be spent without the account existing, or vice versa.
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("auth: begin registration: %w", err)
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+
+	reason, inviteID, err := s.admitRegistration(ctx, tx, username, inviteCode)
+	if err != nil {
+		return nil, err
+	}
+
 	u := &User{Username: username, Role: roleUser}
-	err = s.pool.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO users (username, password_hash) VALUES ($1, $2)
 		RETURNING id`, username, hash).Scan(&u.ID)
 	if err != nil {
@@ -98,11 +115,27 @@ func (s *Service) Register(ctx context.Context, username, password string) (*Use
 		}
 		return nil, fmt.Errorf("auth: create user: %w", err)
 	}
+	if inviteID != "" {
+		if _, err := tx.Exec(ctx, `
+			UPDATE invites SET used_by = $1, used_at = now() WHERE id = $2`,
+			u.ID, inviteID); err != nil {
+			return nil, fmt.Errorf("auth: consume invite: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("auth: commit registration: %w", err)
+	}
 
 	s.audit.Record(ctx, audit.Event{
 		ActorID: u.ID, ActorName: username,
-		Action: "auth.register", Target: username, Result: audit.ResultOK,
+		Action: "auth.register", Target: username, Result: audit.ResultOK, Reason: reason,
 	})
+	if inviteID != "" {
+		s.audit.Record(ctx, audit.Event{
+			ActorID: u.ID, ActorName: username,
+			Action: "invite.redeem", Target: inviteID, Result: audit.ResultOK,
+		})
+	}
 	return u, nil
 }
 

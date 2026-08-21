@@ -9,6 +9,12 @@ type credentialsRequest struct {
 	Password string `json:"password"`
 }
 
+type registerRequest struct {
+	credentialsRequest
+	// InviteCode is required only when the registration policy is invite.
+	InviteCode string `json:"inviteCode"`
+}
+
 type userResponse struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
@@ -16,17 +22,32 @@ type userResponse struct {
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
-	var req credentialsRequest
+	var req registerRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	u, err := s.auth.Register(r.Context(), req.Username, req.Password)
+	u, err := s.auth.Register(r.Context(), req.Username, req.Password, req.InviteCode)
 	if err != nil {
 		s.writeServiceError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, userResponse{ID: u.ID, Username: u.Username, Role: u.Role})
+}
+
+// handleRegistrationStatus tells the sign-up form which fields to show.
+// Public by design: it reveals the policy, never any account.
+func (s *Server) handleRegistrationStatus(w http.ResponseWriter, r *http.Request) {
+	st, err := s.auth.RegistrationStatus(r.Context())
+	if err != nil {
+		s.writeServiceError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mode":                   st.Mode,
+		"acceptingRegistrations": st.Accepting,
+		"inviteRequired":         st.InviteRequired,
+	})
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {

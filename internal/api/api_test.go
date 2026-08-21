@@ -45,6 +45,13 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
+	return newEnvWithPolicy(t, auth.RegistrationPolicy{Mode: auth.RegistrationOpen})
+}
+
+// newEnvWithPolicy builds the environment under a specific registration
+// policy (see registration_test.go); newEnv uses open registration.
+func newEnvWithPolicy(t *testing.T, policy auth.RegistrationPolicy) *env {
+	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("TEST_DATABASE_URL not set; skipping HTTP integration tests")
@@ -62,7 +69,7 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx,
-		"TRUNCATE users, sessions, login_failures, blobs, nodes, grants, audit_events CASCADE"); err != nil {
+		"TRUNCATE users, sessions, login_failures, invites, blobs, nodes, grants, audit_events CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,6 +84,7 @@ func newEnv(t *testing.T) *env {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 	auditLog := audit.New(pool, logger)
 	authSvc := auth.NewService(pool, auditLog)
+	authSvc.SetRegistrationPolicy(policy)
 	repo := files.NewRepo(pool, store, auditLog, testMaxUpload)
 
 	srv := NewServer(authSvc, repo, auditLog, pool, logger, true, testMaxUpload, nil)

@@ -102,3 +102,8 @@ HTTP:
 ```bash
 psql -d securevault -c "UPDATE users SET role = 'admin' WHERE username = 'someone';"
 ```
+
+Registration is `open` in development (`.env.example`). To exercise the
+invite flow locally, set `REGISTRATION_MODE=invite` in `.env`, restart
+`make dev`, and note that the first account on an empty database can still
+register — promote it, then issue codes from **Administration → Invites**.

@@ -52,6 +52,19 @@ All configuration enters through the environment (see `.env.example`):
 | `LISTEN_ADDR`            | bind address (behind Caddy: internal only)          |
 | `MAX_UPLOAD_BYTES`       | streaming upload limit                              |
 | `ENV`                    | `prod` enables `Secure` cookies (TLS required)      |
+| `REGISTRATION_MODE`      | `open` (default), `invite` (admin-issued one-time codes), or `closed` |
+| `MAX_USERS`              | hard cap on accounts, any mode; `0`/unset = unlimited |
+
+**Restricting sign-up.** `open` is for development. For anything reachable
+from the internet set `REGISTRATION_MODE=invite`: administrators issue
+one-time invite codes from the admin UI (or `POST /api/admin/invites`) and
+the sign-up form asks for one. `closed` refuses every registration.
+Whatever the mode, the **first** account on an empty database may always
+register (bootstrap) — promote it to admin with the SQL in
+[development.md](development.md) and it can issue invites from then on.
+`MAX_USERS` adds a ceiling that no mode or invite can exceed. Policy
+denials are audited (`auth.register denied` with reason
+`registration_closed`, `invite_required`, `invite_invalid`, or `user_limit`).
 
 The master key is generated with `make genkey`, lives in the git-ignored
 `.env`, and is validated at startup — the server refuses to boot with a

@@ -20,7 +20,9 @@ Team: Bernard Appiah, Soumita Bose, Habibullah Turkmen, Sahil Zainul Aabeddin Ka
   associated data, so objects cannot be swapped on disk undetected.
 - **From-scratch authentication** — Argon2id (64 MiB, t=3, p=4), opaque
   session tokens stored only as SHA-256 hashes, hardened cookies, session
-  rotation, login throttling, timing-equalized uniform errors. `internal/auth`
+  rotation, login throttling, timing-equalized uniform errors; registration
+  policy (open / admin-issued one-time invite codes / closed, plus a user
+  cap). `internal/auth`
 - **Centralized authorization** — one deny-by-default `authz.Can` function
   decides every file-touching request; sharing roles owner / editor / viewer;
   the admin account role reviews accounts and audit logs but can never read

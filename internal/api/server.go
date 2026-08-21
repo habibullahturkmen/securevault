@@ -59,6 +59,7 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	// Authentication.
+	mux.HandleFunc("GET /api/auth/registration", s.handleRegistrationStatus)
 	mux.HandleFunc("POST /api/auth/register", s.handleRegister)
 	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	mux.HandleFunc("POST /api/auth/logout", s.requireAuth(s.handleLogout))
@@ -78,6 +79,10 @@ func (s *Server) Handler() http.Handler {
 	// Administration: account review and audit review only — no file access.
 	mux.HandleFunc("GET /api/admin/users", s.requireAuth(s.requireAdmin(s.handleAdminUsers)))
 	mux.HandleFunc("GET /api/admin/audit", s.requireAuth(s.requireAdmin(s.handleAdminAudit)))
+	// Invite codes for restricted registration (REGISTRATION_MODE=invite).
+	mux.HandleFunc("GET /api/admin/invites", s.requireAuth(s.requireAdmin(s.handleAdminInvites)))
+	mux.HandleFunc("POST /api/admin/invites", s.requireAuth(s.requireAdmin(s.requireCSRF(s.handleAdminCreateInvite))))
+	mux.HandleFunc("DELETE /api/admin/invites/{id}", s.requireAuth(s.requireAdmin(s.requireCSRF(s.handleAdminRevokeInvite))))
 
 	// Unknown API routes get a JSON 404 rather than the SPA fallback.
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
@@ -227,8 +232,17 @@ func (s *Server) writeServiceError(w http.ResponseWriter, r *http.Request, err e
 		writeError(w, http.StatusUnauthorized, err.Error())
 	case errors.Is(err, auth.ErrUsernameTaken):
 		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, auth.ErrUsernamePolicy), errors.Is(err, auth.ErrPasswordPolicy):
+	case errors.Is(err, auth.ErrUsernamePolicy), errors.Is(err, auth.ErrPasswordPolicy),
+		errors.Is(err, auth.ErrInvitePolicy):
 		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, auth.ErrRegistrationClosed), errors.Is(err, auth.ErrInviteRequired),
+		errors.Is(err, auth.ErrInviteInvalid), errors.Is(err, auth.ErrUserLimitReached):
+		writeError(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, auth.ErrInviteNotFound):
+		writeError(w, http.StatusNotFound, err.Error())
+	case errors.Is(err, auth.ErrAdminRequired):
+		// Same shape as requireAdmin: admin surfaces do not reveal themselves.
+		writeError(w, http.StatusNotFound, "not found")
 	case errors.Is(err, files.ErrValidation):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, files.ErrNotFound):
