@@ -1,0 +1,26 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "_comment": "Coolify 'Railpack' build pack (the default): same pipeline as deploy/Dockerfile — build the frontend, then the Go binary with the UI embedded — driven by Railpack's Go provider. Node 22 is added for Vite; pnpm is fetched at the version pinned in web/package.json (packageManager). Secrets (SECUREVAULT_MASTER_KEY, DATABASE_URL) are set in Coolify, never here.",
+  "packages": {
+    "node": "22"
+  },
+  "steps": {
+    "build": {
+      "commands": [
+        "cd web && npx --yes pnpm@11 install --frozen-lockfile && npx --yes pnpm@11 build",
+        "CGO_ENABLED=0 go build -tags embedui -trimpath -ldflags=\"-w -s\" -o out ./cmd/server"
+      ]
+    }
+  },
+  "deploy": {
+    "inputs": [
+      { "step": "build", "include": ["out"] }
+    ],
+    "startCommand": "./out",
+    "variables": {
+      "LISTEN_ADDR": "0.0.0.0:8080",
+      "DATA_DIR": "/data",
+      "ENV": "prod"
+    }
+  }
+}

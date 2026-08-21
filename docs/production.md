@@ -95,19 +95,21 @@ browser ──HTTPS──▶ caddy (TLS 1.3)                [edge + internal net
 [Coolify](https://coolify.io) runs its own reverse proxy (Traefik by
 default, optionally Caddy) that terminates TLS and obtains certificates, so
 the repository's Caddy service is not needed there. The app is deployed as
-a native **Nixpacks** application — Coolify builds the frontend, then the
-Go binary with it embedded, straight from the repository according to
-`nixpacks.toml` — and PostgreSQL as a Coolify-managed database resource
-next to it. No Dockerfile or Compose file is involved. Both land on the
-same Docker network, which is the "internal" zone of the Compose stack
-above.
+a native **Railpack** application (Coolify's default build pack) — Coolify
+builds the frontend, then the Go binary with it embedded, straight from the
+repository according to `railpack.json` — and PostgreSQL as a
+Coolify-managed database resource next to it. No Dockerfile or Compose file
+is involved. Both land on the same Docker network, which is the "internal"
+zone of the Compose stack above.
 
-`nixpacks.toml` at the repository root drives the build: Nixpacks's Go
-provider brings the toolchain, a custom `web` phase runs `pnpm install` and
-`pnpm build` in `web/` (pnpm at the version pinned in `package.json`), the
-`build` phase runs `go build -tags embedui` so `web/dist` is embedded, and
-the container starts `./out`. `LISTEN_ADDR=0.0.0.0:8080`, `DATA_DIR=/data`
-and `ENV=prod` are set as image variables there — the secrets are not.
+`railpack.json` at the repository root drives the build: Railpack's Go
+provider detects `go.mod` and brings Go 1.25 (via mise); `packages` adds
+Node 22; the overridden `build` step runs `pnpm install` and `pnpm build`
+in `web/` (pnpm fetched at the version pinned in `package.json`) and then
+`go build -tags embedui` so `web/dist` is embedded; only the static `out`
+binary is copied into the runtime image, which starts `./out`.
+`LISTEN_ADDR=0.0.0.0:8080`, `DATA_DIR=/data` and `ENV=prod` are set as
+deploy variables there — the secrets are not.
 
 ### 1. PostgreSQL
 
@@ -127,9 +129,9 @@ pick the repository and branch, then:
 
 | Setting | Value |
 |---|---|
-| Build Pack | **Nixpacks** (the default) |
-| Base Directory | `/` — `nixpacks.toml`, `go.mod` and `web/` are all at the root |
-| Install / Build / Start Command | leave **empty**; `nixpacks.toml` defines them |
+| Build Pack | **Railpack** (the default) |
+| Base Directory | `/` — `railpack.json`, `go.mod` and `web/` are all at the root |
+| Install / Build / Start Command | leave **empty**; `railpack.json` defines them |
 | Ports Exposes | `8080` |
 | Domain | `https://vault.example.com` — point its DNS at the Coolify host first |
 
@@ -142,12 +144,12 @@ runtime-only):
 | `DATABASE_URL` | the internal URL copied in step 1 |
 
 Nothing else is required: `ENV=prod`, `LISTEN_ADDR=0.0.0.0:8080` and
-`DATA_DIR=/data` come from `nixpacks.toml`.
+`DATA_DIR=/data` come from `railpack.json`.
 
 **Persistent Storage → Add → Volume Mount**, destination `/data`. The
 blob store lives there; the app creates its subdirectories on first start.
-(The Nixpacks image runs as root, so a host-directory bind also works, but
-a named volume is the simpler choice.)
+(The Railpack runtime image runs as root, so a host-directory bind also
+works, but a named volume is the simpler choice.)
 
 **Healthcheck** tab — enable it with:
 
@@ -159,18 +161,22 @@ a named volume is the simpler choice.)
 | Return code | `200` |
 | Interval / Timeout / Retries / Start period | `30` / `5` / `3` / `10` seconds |
 
-Coolify runs this check with `curl` (or `wget`) *inside* the container,
-which is why `nixpacks.toml` sets `runImage = "buildpack-deps:bookworm-curl"`
-(Debian slim plus curl/wget/CA certificates) for the run stage instead of
-the provider's bare debian-slim image, which has neither tool. Only the
-static binary is copied into it (`onlyIncludeFiles = ["out"]`).
+Coolify runs this check with `curl` (or `wget`) *inside* the container;
+with Railpack it installs both into the runtime image itself
+(`RAILPACK_DEPLOY_APT_PACKAGES=curl wget` in the build log), so nothing
+extra is needed.
 
-**Deploy.** Watch the build log: the `web` phase (`pnpm build` → Vite
-output), then `go build -tags embedui`. If the Go provider's toolchain is
-older than the `go 1.25` in `go.mod`, Go downloads 1.25 itself
-(`GOTOOLCHAIN=auto`) — a one-time extra minute. On start the app applies
-migrations against the managed Postgres; look for
-`"msg":"migrations up to date"` followed by `"msg":"listening"`.
+**Deploy.** Watch the build log: the Railpack plan it prints should show
+the `build` step with the `pnpm` commands and `go build -tags embedui`,
+and `deploy.variables` with `LISTEN_ADDR`. On start the app applies
+migrations against the managed Postgres; the runtime log must read
+
+```
+"msg":"listening","addr":"0.0.0.0:8080","dev":false,"embedded_ui":true
+```
+
+`127.0.0.1:8080` / `"dev":true` / `"embedded_ui":false` means the build
+ran without `railpack.json` (wrong branch or Base Directory).
 
 ### 3. First admin
 
@@ -182,7 +188,7 @@ terminal in Coolify (or `docker exec -it <pg-container> psql -U <user>
 ### Security properties carried over
 
 - Cookies are `Secure` and HSTS is emitted by the app (`ENV=prod` is set
-  in `nixpacks.toml`), so nothing depends on proxy configuration.
+  in `railpack.json`), so nothing depends on proxy configuration.
 - No host ports are published; the app is reachable only through the
   proxy, the database only from the Coolify network.
 - The blob-store volume and the Postgres data survive redeploys. Include
@@ -196,6 +202,11 @@ terminal in Coolify (or `docker exec -it <pg-container> psql -U <user>
 Same binary, same security properties — pick whichever fits how you manage
 the server:
 
+- **Nixpacks build pack** (older Coolify default, still selectable).
+  `nixpacks.toml` at the repository root is the equivalent of
+  `railpack.json`: Node added to the Go provider, a `web` phase for the
+  frontend, `go build -tags embedui`, the same variables, and a run image
+  that ships curl so Coolify's health check works.
 - **Dockerfile application.** Build Pack *Dockerfile*, Base Directory `/`,
   Dockerfile Location `/deploy/Dockerfile`, port `8080`, the same two
   environment variables and `/data` volume. Differences from Nixpacks: the

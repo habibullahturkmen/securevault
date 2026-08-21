@@ -82,7 +82,7 @@ internal/api/        HTTP handlers, middleware, CSRF, security headers
 internal/audit/      append-only audit event writer
 web/                 React + TypeScript UI (embedded via web/embed_on.go)
 deploy/              Dockerfile, docker-compose.yml, Caddyfile
-nixpacks.toml        Coolify native build (frontend → embedded Go binary)
+railpack.json        Coolify native build (frontend → embedded Go binary); nixpacks.toml for the older pack
 docs/                development, production, and security documentation
 .github/workflows/   CI: fmt, vet, race tests, Semgrep, gitleaks, ZAP
 ```
