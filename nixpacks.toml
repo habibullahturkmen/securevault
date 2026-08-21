@@ -1,0 +1,32 @@
+# Coolify "Nixpacks" build pack: the same pipeline as deploy/Dockerfile
+# (build the frontend, then the Go binary with the UI embedded) without a
+# Dockerfile. Nixpacks's Go provider supplies the toolchain, `go mod
+# download` and `./out` as the start command; this file adds Node for the
+# frontend, a phase that builds it, and the embedui build tag.
+#
+# Go version: go.mod asks for 1.25; if the provider's Nix package is older,
+# the Go toolchain auto-downloads 1.25 (GOTOOLCHAIN=auto, the default).
+providers = ["go"]
+
+[phases.setup]
+# "..." keeps the Go provider's own packages and adds Node 22 for Vite.
+nixPkgs = ["...", "nodejs_22"]
+
+# Frontend: pnpm is fetched at the version pinned in web/package.json
+# (`packageManager`), so no global install is needed.
+[phases.web]
+dependsOn = ["setup"]
+cmds = ["cd web && npx --yes pnpm@11 install --frozen-lockfile && npx --yes pnpm@11 build"]
+
+# Go binary with web/dist embedded; static so it runs in the slim run image.
+[phases.build]
+dependsOn = ["...", "web"]
+cmds = ["CGO_ENABLED=0 go build -tags embedui -trimpath -o out ./cmd/server"]
+
+# Runtime defaults matching deploy/Dockerfile. SECUREVAULT_MASTER_KEY and
+# DATABASE_URL are set in Coolify, never here.
+[variables]
+LISTEN_ADDR = "0.0.0.0:8080"
+DATA_DIR = "/data"
+ENV = "prod"
+CGO_ENABLED = "0"

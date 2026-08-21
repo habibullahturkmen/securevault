@@ -81,7 +81,8 @@ internal/files/      upload/download/share/delete over storage + metadata
 internal/api/        HTTP handlers, middleware, CSRF, security headers
 internal/audit/      append-only audit event writer
 web/                 React + TypeScript UI (embedded via web/embed_on.go)
-deploy/              Dockerfile, docker-compose.yml, Caddyfile (root: docker-compose.coolify.yml)
+deploy/              Dockerfile, docker-compose.yml, Caddyfile
+nixpacks.toml        Coolify native build (frontend → embedded Go binary)
 docs/                development, production, and security documentation
 .github/workflows/   CI: fmt, vet, race tests, Semgrep, gitleaks, ZAP
 ```

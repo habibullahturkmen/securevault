@@ -95,10 +95,19 @@ browser ──HTTPS──▶ caddy (TLS 1.3)                [edge + internal net
 [Coolify](https://coolify.io) runs its own reverse proxy (Traefik by
 default, optionally Caddy) that terminates TLS and obtains certificates, so
 the repository's Caddy service is not needed there. The app is deployed as
-a plain **Dockerfile application** from `deploy/Dockerfile`, and PostgreSQL
-as a Coolify-managed database resource next to it — no Compose file
-involved. Both land on the same Docker network, which is the "internal"
-zone of the Compose stack above.
+a native **Nixpacks** application — Coolify builds the frontend, then the
+Go binary with it embedded, straight from the repository according to
+`nixpacks.toml` — and PostgreSQL as a Coolify-managed database resource
+next to it. No Dockerfile or Compose file is involved. Both land on the
+same Docker network, which is the "internal" zone of the Compose stack
+above.
+
+`nixpacks.toml` at the repository root drives the build: Nixpacks's Go
+provider brings the toolchain, a custom `web` phase runs `pnpm install` and
+`pnpm build` in `web/` (pnpm at the version pinned in `package.json`), the
+`build` phase runs `go build -tags embedui` so `web/dist` is embedded, and
+the container starts `./out`. `LISTEN_ADDR=0.0.0.0:8080`, `DATA_DIR=/data`
+and `ENV=prod` are set as image variables there — the secrets are not.
 
 ### 1. PostgreSQL
 
@@ -118,9 +127,9 @@ pick the repository and branch, then:
 
 | Setting | Value |
 |---|---|
-| Build Pack | **Dockerfile** |
-| Base Directory | `/` (the Dockerfile copies `web/`, `cmd/`, `internal/` from the repo root) |
-| Dockerfile Location | `/deploy/Dockerfile` |
+| Build Pack | **Nixpacks** (the default) |
+| Base Directory | `/` — `nixpacks.toml`, `go.mod` and `web/` are all at the root |
+| Install / Build / Start Command | leave **empty**; `nixpacks.toml` defines them |
 | Ports Exposes | `8080` |
 | Domain | `https://vault.example.com` — point its DNS at the Coolify host first |
 
@@ -132,24 +141,25 @@ runtime-only):
 | `SECUREVAULT_MASTER_KEY` | output of `make genkey`, run locally. **Back it up outside Coolify** — losing it loses every stored file (see [operations.md](operations.md)). |
 | `DATABASE_URL` | the internal URL copied in step 1 |
 
-`ENV=prod`, `LISTEN_ADDR=0.0.0.0:8080` and `DATA_DIR=/data` are already
-baked into the image; nothing else is required.
+Nothing else is required: `ENV=prod`, `LISTEN_ADDR=0.0.0.0:8080` and
+`DATA_DIR=/data` come from `nixpacks.toml`.
 
-**Persistent Storage → Add → Volume Mount**, destination `/data`. Use a
-named *volume* mount, not a host-directory bind: the image ships `/data`
-owned by the distroless `nonroot` user (uid 65532) and a fresh named volume
-inherits that ownership, whereas a bind-mounted host directory would be
-root-owned and the nonroot process could not write to it.
+**Persistent Storage → Add → Volume Mount**, destination `/data`. The
+blob store lives there; the app creates its subdirectories on first start.
+(The Nixpacks image runs as root, so a host-directory bind also works, but
+a named volume is the simpler choice.)
 
-**Healthcheck:** turn Coolify's built-in health check **off** for this
-resource. It runs `curl`/`wget` *inside* the container, and the distroless
-image deliberately has neither — with it on, Coolify would report the app
-unhealthy forever and rolling deploys would never switch over. The proxy
-still only routes to a running container.
+**Healthcheck:** the Nixpacks run image is slim and may lack `curl`/`wget`,
+which Coolify's built-in health check runs *inside* the container. If the
+resource shows *unhealthy* after a successful start, turn the health check
+off; the proxy still only routes to a running container. (The app's own
+probe is `GET /api/health`.)
 
-**Deploy.** Coolify builds the image (frontend, then the Go binary with the
-UI embedded), starts it, and the app applies migrations against the managed
-Postgres on boot. Watch the deploy log for
+**Deploy.** Watch the build log: the `web` phase (`pnpm build` → Vite
+output), then `go build -tags embedui`. If the Go provider's toolchain is
+older than the `go 1.25` in `go.mod`, Go downloads 1.25 itself
+(`GOTOOLCHAIN=auto`) — a one-time extra minute. On start the app applies
+migrations against the managed Postgres; look for
 `"msg":"migrations up to date"` followed by `"msg":"listening"`.
 
 ### 3. First admin
@@ -162,7 +172,7 @@ terminal in Coolify (or `docker exec -it <pg-container> psql -U <user>
 ### Security properties carried over
 
 - Cookies are `Secure` and HSTS is emitted by the app (`ENV=prod` is set
-  in the Dockerfile), so nothing depends on proxy configuration.
+  in `nixpacks.toml`), so nothing depends on proxy configuration.
 - No host ports are published; the app is reachable only through the
   proxy, the database only from the Coolify network.
 - The blob-store volume and the Postgres data survive redeploys. Include
@@ -171,15 +181,23 @@ terminal in Coolify (or `docker exec -it <pg-container> psql -U <user>
 - If Coolify's "force HTTPS" redirect is available for the resource, turn
   it on; HSTS then makes it sticky for returning browsers.
 
-### Alternative: one Compose resource
+### Alternatives
 
-`docker-compose.coolify.yml` at the repository root bundles app + Postgres
-into a single **Docker Compose** resource (Base Directory `/`, Docker
-Compose Location `/docker-compose.coolify.yml`). Set
-`SECUREVAULT_MASTER_KEY` under Environment Variables; Coolify fills
-`SERVICE_PASSWORD_POSTGRES` and routes the domain you assign to the `app`
-service via `SERVICE_FQDN_APP_8080`. Same image, same security properties —
-use whichever fits how you manage the server.
+Same binary, same security properties — pick whichever fits how you manage
+the server:
+
+- **Dockerfile application.** Build Pack *Dockerfile*, Base Directory `/`,
+  Dockerfile Location `/deploy/Dockerfile`, port `8080`, the same two
+  environment variables and `/data` volume. Differences from Nixpacks: the
+  image is distroless and runs as the `nonroot` user, so use a named
+  *volume* mount (not a host-directory bind, which would be root-owned) and
+  turn Coolify's health check off (no `curl`/`wget` in the image).
+- **One Compose resource.** `docker-compose.coolify.yml` at the repository
+  root bundles app + Postgres (Base Directory `/`, Docker Compose Location
+  `/docker-compose.coolify.yml`). Set `SECUREVAULT_MASTER_KEY` under
+  Environment Variables; Coolify fills `SERVICE_PASSWORD_POSTGRES` and
+  routes the domain you assign to the `app` service via
+  `SERVICE_FQDN_APP_8080`.
 
 ## CI security gates
 
