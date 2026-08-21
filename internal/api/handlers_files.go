@@ -214,8 +214,12 @@ func (s *Server) handleAdminUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"users": users})
 }
 
+// handleAdminAudit pages through the audit log newest-first by keyset on the
+// append-only id: ?limit=N (1–1000, default 50) and ?before=<id> to continue
+// from a previous page's nextBefore. Keyset paging stays correct while new
+// events keep arriving, which offset paging would not.
 func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
-	limit := 200
+	limit := 50
 	if v := r.URL.Query().Get("limit"); v != "" {
 		n, err := strconv.Atoi(v)
 		if err != nil || n < 1 || n > 1000 {
@@ -224,10 +228,22 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 		}
 		limit = n
 	}
+	var before int64 // 0 = start from the newest event
+	if v := r.URL.Query().Get("before"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 1 {
+			writeError(w, http.StatusBadRequest, "before must be a positive event id")
+			return
+		}
+		before = n
+	}
 
+	// Fetch one extra row to learn whether an older page exists.
 	rows, err := s.pool.Query(r.Context(), `
-		SELECT at, actor_name, action, target, result, reason, request_id
-		FROM audit_events ORDER BY id DESC LIMIT $1`, limit)
+		SELECT id, at, actor_name, action, target, result, reason, request_id
+		FROM audit_events
+		WHERE $1::bigint = 0 OR id < $1
+		ORDER BY id DESC LIMIT $2`, before, limit+1)
 	if err != nil {
 		s.writeServiceError(w, r, err)
 		return
@@ -235,6 +251,7 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type event struct {
+		ID        int64     `json:"id"`
 		At        time.Time `json:"at"`
 		Actor     string    `json:"actor"`
 		Action    string    `json:"action"`
@@ -246,11 +263,17 @@ func (s *Server) handleAdminAudit(w http.ResponseWriter, r *http.Request) {
 	events := []event{}
 	for rows.Next() {
 		var e event
-		if err := rows.Scan(&e.At, &e.Actor, &e.Action, &e.Target, &e.Result, &e.Reason, &e.RequestID); err != nil {
+		if err := rows.Scan(&e.ID, &e.At, &e.Actor, &e.Action, &e.Target, &e.Result, &e.Reason, &e.RequestID); err != nil {
 			s.writeServiceError(w, r, err)
 			return
 		}
 		events = append(events, e)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	var nextBefore *int64
+	if len(events) > limit {
+		events = events[:limit]
+		id := events[len(events)-1].ID
+		nextBefore = &id
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events, "nextBefore": nextBefore})
 }

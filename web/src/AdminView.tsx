@@ -15,12 +15,20 @@ const TTL_OPTIONS = [
   { hours: 720, label: '30 days' },
 ]
 
+const AUDIT_PAGE_SIZE = 20
+
 export default function AdminView() {
   const [users, setUsers] = useState<AccountRow[]>([])
-  const [events, setEvents] = useState<AuditEvent[]>([])
   const [invites, setInvites] = useState<Invite[]>([])
   const [policy, setPolicy] = useState<RegistrationStatus | null>(null)
   const [error, setError] = useState('')
+
+  // Audit log paging. cursors[i] is the `before` id that loaded page i
+  // (null for the newest page), so "Newer" is a pop and "Older" a push.
+  const [events, setEvents] = useState<AuditEvent[]>([])
+  const [cursors, setCursors] = useState<(number | null)[]>([null])
+  const [nextBefore, setNextBefore] = useState<number | null>(null)
+  const [auditBusy, setAuditBusy] = useState(false)
 
   const [note, setNote] = useState('')
   const [ttlHours, setTtlHours] = useState(168)
@@ -29,18 +37,50 @@ export default function AdminView() {
   const [freshCode, setFreshCode] = useState<{ code: string; note: string } | null>(null)
   const [copied, setCopied] = useState(false)
 
+  const loadAudit = useCallback((before: number | null) => {
+    setAuditBusy(true)
+    api
+      .adminAudit(AUDIT_PAGE_SIZE, before)
+      .then((res) => {
+        setEvents(res.events)
+        setNextBefore(res.nextBefore)
+      })
+      .catch((err) => setError(err instanceof ApiError ? err.message : 'failed to load audit log'))
+      .finally(() => setAuditBusy(false))
+  }, [])
+
   const refresh = useCallback(() => {
-    Promise.all([api.adminUsers(), api.adminAudit(), api.adminInvites(), api.registrationStatus()])
-      .then(([u, a, i, p]) => {
+    Promise.all([api.adminUsers(), api.adminInvites(), api.registrationStatus()])
+      .then(([u, i, p]) => {
         setUsers(u.users)
-        setEvents(a.events)
         setInvites(i.invites)
         setPolicy(p)
       })
       .catch((err) => setError(err instanceof ApiError ? err.message : 'failed to load'))
   }, [])
 
-  useEffect(refresh, [refresh])
+  useEffect(() => {
+    refresh()
+    loadAudit(null)
+  }, [refresh, loadAudit])
+
+  function olderPage() {
+    if (nextBefore === null) return
+    setCursors((c) => [...c, nextBefore])
+    loadAudit(nextBefore)
+  }
+
+  function newerPage() {
+    if (cursors.length < 2) return
+    const next = cursors.slice(0, -1)
+    setCursors(next)
+    loadAudit(next[next.length - 1])
+  }
+
+  function newestPage() {
+    setCursors([null])
+    loadAudit(null)
+  }
 
   async function issueInvite(e: FormEvent) {
     e.preventDefault()
@@ -52,6 +92,7 @@ export default function AdminView() {
       setFreshCode({ code: res.code, note: res.invite.note })
       setNote('')
       refresh()
+      newestPage()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'could not create invite')
     } finally {
@@ -64,6 +105,7 @@ export default function AdminView() {
     try {
       await api.adminRevokeInvite(inv.id)
       refresh()
+      newestPage()
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'revoke failed')
     }
@@ -79,29 +121,37 @@ export default function AdminView() {
     }
   }
 
+  const pageNumber = cursors.length
+
   return (
     <div className="admin">
-      {error && <p className="error" role="alert">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error} <button className="link" onClick={() => setError('')}>dismiss</button>
+        </p>
+      )}
 
       <h2>Accounts</h2>
-      <table className="files">
-        <thead>
-          <tr>
-            <th>Username</th>
-            <th>Role</th>
-            <th>Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((u) => (
-            <tr key={u.id}>
-              <td>{u.username}</td>
-              <td>{u.role}</td>
-              <td>{new Date(u.createdAt).toLocaleString()}</td>
+      <div className="table-wrap">
+        <table className="files">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Created</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {users.map((u) => (
+              <tr key={u.id}>
+                <td className="cell-ellipsis" title={u.username}>{u.username}</td>
+                <td>{u.role}</td>
+                <td>{new Date(u.createdAt).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <h2>Invites</h2>
       {policy && (
@@ -154,73 +204,106 @@ export default function AdminView() {
           </p>
         </div>
       )}
-      <table className="files">
-        <thead>
-          <tr>
-            <th>Note</th>
-            <th>Issued by</th>
-            <th>Issued</th>
-            <th>Expires</th>
-            <th>Status</th>
-            <th>Used by</th>
-            <th className="actions-col">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invites.length === 0 && (
+      <div className="table-wrap">
+        <table className="files">
+          <thead>
             <tr>
-              <td colSpan={7} className="muted">
-                No invites issued yet.
-              </td>
+              <th>Note</th>
+              <th>Issued by</th>
+              <th>Issued</th>
+              <th>Expires</th>
+              <th>Status</th>
+              <th>Used by</th>
+              <th className="actions-col">Actions</th>
             </tr>
-          )}
-          {invites.map((i) => (
-            <tr key={i.id} className={i.status === 'revoked' ? 'denied-row' : ''}>
-              <td>{i.note || '—'}</td>
-              <td>{i.createdBy}</td>
-              <td>{new Date(i.createdAt).toLocaleString()}</td>
-              <td>{new Date(i.expiresAt).toLocaleString()}</td>
-              <td>
-                <span className={`role invite-${i.status}`}>{i.status}</span>
-              </td>
-              <td>{i.usedBy || '—'}</td>
-              <td className="actions-col">
-                {i.status === 'active' && (
-                  <button className="link small danger-link" onClick={() => revoke(i)}>
-                    Revoke
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {invites.length === 0 && (
+              <tr>
+                <td colSpan={7} className="muted">
+                  No invites issued yet.
+                </td>
+              </tr>
+            )}
+            {invites.map((i) => (
+              <tr key={i.id} className={i.status === 'revoked' ? 'denied-row' : ''}>
+                <td className="cell-ellipsis" title={i.note}>{i.note || '—'}</td>
+                <td className="cell-ellipsis" title={i.createdBy}>{i.createdBy}</td>
+                <td>{new Date(i.createdAt).toLocaleString()}</td>
+                <td>{new Date(i.expiresAt).toLocaleString()}</td>
+                <td>
+                  <span className={`role invite-${i.status}`}>{i.status}</span>
+                </td>
+                <td className="cell-ellipsis" title={i.usedBy}>{i.usedBy || '—'}</td>
+                <td className="actions-col">
+                  {i.status === 'active' && (
+                    <button className="link small danger-link" onClick={() => revoke(i)}>
+                      Revoke
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-      <h2>Audit log (latest 200)</h2>
-      <table className="files audit">
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Actor</th>
-            <th>Action</th>
-            <th>Target</th>
-            <th>Result</th>
-            <th>Reason</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events.map((e, i) => (
-            <tr key={i} className={e.result === 'denied' ? 'denied-row' : ''}>
-              <td>{new Date(e.at).toLocaleString()}</td>
-              <td>{e.actor || '—'}</td>
-              <td>{e.action}</td>
-              <td className="target-cell">{e.target}</td>
-              <td>{e.result}</td>
-              <td>{e.reason}</td>
+      <h2>Audit log</h2>
+      <div className="pager">
+        <button className="small" onClick={newestPage} disabled={auditBusy || pageNumber === 1}>
+          Newest
+        </button>
+        <button className="small" onClick={newerPage} disabled={auditBusy || pageNumber === 1}>
+          ‹ Newer
+        </button>
+        <span className="muted">
+          Page {pageNumber} · {events.length} events{auditBusy ? ' · loading…' : ''}
+        </span>
+        <button className="small" onClick={olderPage} disabled={auditBusy || nextBefore === null}>
+          Older ›
+        </button>
+      </div>
+      <div className="table-wrap">
+        <table className="files audit">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>Target</th>
+              <th>Result</th>
+              <th>Reason</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {events.length === 0 && (
+              <tr>
+                <td colSpan={6} className="muted">
+                  No events on this page.
+                </td>
+              </tr>
+            )}
+            {events.map((e) => (
+              <tr key={e.id} className={e.result === 'denied' ? 'denied-row' : ''}>
+                <td>{new Date(e.at).toLocaleString()}</td>
+                <td className="cell-ellipsis" title={e.actor}>{e.actor || '—'}</td>
+                <td>{e.action}</td>
+                <td className="cell-ellipsis target-cell" title={e.target}>{e.target}</td>
+                <td>{e.result}</td>
+                <td className="cell-ellipsis" title={e.reason}>{e.reason}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/*<div className="pager">*/}
+      {/*  <button className="small" onClick={newerPage} disabled={auditBusy || pageNumber === 1}>*/}
+      {/*    ‹ Newer*/}
+      {/*  </button>*/}
+      {/*  <button className="small" onClick={olderPage} disabled={auditBusy || nextBefore === null}>*/}
+      {/*    Older ›*/}
+      {/*  </button>*/}
+      {/*</div>*/}
     </div>
   )
 }
