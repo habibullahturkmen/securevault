@@ -23,6 +23,16 @@ cmds = ["cd web && npx --yes pnpm@11 install --frozen-lockfile && npx --yes pnpm
 dependsOn = ["...", "web"]
 cmds = ["CGO_ENABLED=0 go build -tags embedui -trimpath -o out ./cmd/server"]
 
+# Run stage: only the static binary is copied into a small Debian image.
+# buildpack-deps:*-curl (Debian slim + curl/wget/ca-certificates) instead of
+# the provider's bare debian-slim because Coolify's health check runs
+# `curl`/`wget` inside the container against /api/health; the bare image has
+# neither and the app would be reported unhealthy forever.
+[start]
+cmd = "./out"
+runImage = "buildpack-deps:bookworm-curl"
+onlyIncludeFiles = ["out"]
+
 # Runtime defaults matching deploy/Dockerfile. SECUREVAULT_MASTER_KEY and
 # DATABASE_URL are set in Coolify, never here.
 [variables]

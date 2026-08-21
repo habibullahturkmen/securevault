@@ -149,11 +149,21 @@ blob store lives there; the app creates its subdirectories on first start.
 (The Nixpacks image runs as root, so a host-directory bind also works, but
 a named volume is the simpler choice.)
 
-**Healthcheck:** the Nixpacks run image is slim and may lack `curl`/`wget`,
-which Coolify's built-in health check runs *inside* the container. If the
-resource shows *unhealthy* after a successful start, turn the health check
-off; the proxy still only routes to a running container. (The app's own
-probe is `GET /api/health`.)
+**Healthcheck** tab — enable it with:
+
+| Field | Value |
+|---|---|
+| Method / Scheme | `GET` / `http` |
+| Host / Port | `localhost` / `8080` |
+| Path | `/api/health` |
+| Return code | `200` |
+| Interval / Timeout / Retries / Start period | `30` / `5` / `3` / `10` seconds |
+
+Coolify runs this check with `curl` (or `wget`) *inside* the container,
+which is why `nixpacks.toml` sets `runImage = "buildpack-deps:bookworm-curl"`
+(Debian slim plus curl/wget/CA certificates) for the run stage instead of
+the provider's bare debian-slim image, which has neither tool. Only the
+static binary is copied into it (`onlyIncludeFiles = ["out"]`).
 
 **Deploy.** Watch the build log: the `web` phase (`pnpm build` → Vite
 output), then `go build -tags embedui`. If the Go provider's toolchain is
