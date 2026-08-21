@@ -71,7 +71,7 @@ Then open **https://localhost** and accept Caddy's locally-issued
 certificate (`tls internal`). The stack mirrors the proposal's trust zones:
 
 ```
-browser ──HTTPS──▶ caddy (TLS 1.3, HSTS)          [edge + internal networks]
+browser ──HTTPS──▶ caddy (TLS 1.3)                [edge + internal networks]
                      │ reverse_proxy
                      ▼
                    app (single binary, ENV=prod)   [internal network only]
@@ -89,6 +89,50 @@ browser ──HTTPS──▶ caddy (TLS 1.3, HSTS)          [edge + internal net
 - For a real domain, edit `deploy/Caddyfile`: replace `localhost` with the
   domain and delete `tls internal`; Caddy then provisions certificates
   automatically.
+
+## Deploying on Coolify
+
+[Coolify](https://coolify.io) runs its own reverse proxy (Traefik by
+default, optionally Caddy) that terminates TLS and obtains certificates, so
+the repository's Caddy service is not needed there.
+`docker-compose.coolify.yml` is the same stack minus Caddy: the app
+and PostgreSQL, with the app published only through Coolify's proxy.
+
+1. Push the repository to GitHub (or any Git host Coolify can reach).
+2. In Coolify: **Project → New Resource → Docker Compose**, pick the Git
+   repository and branch, then set
+   - **Base Directory:** `/`
+   - **Docker Compose Location:** `/docker-compose.coolify.yml`
+3. Coolify parses the file and shows the `app` service. Give it a domain
+   (`https://vault.example.com`) — the `SERVICE_FQDN_APP_8080` magic
+   variable in the compose file routes that domain to the app's port 8080
+   and the proxy handles the certificate. Point the domain's DNS at the
+   Coolify server first.
+4. Under **Environment Variables**, set `SECUREVAULT_MASTER_KEY` to the
+   output of `make genkey` (run locally). Coolify fills
+   `SERVICE_PASSWORD_POSTGRES` itself and hands the same value to both
+   services. Back the master key up somewhere outside Coolify — losing it
+   means losing every stored file (see [operations.md](operations.md)).
+5. **Deploy.** Coolify builds `deploy/Dockerfile` (frontend, then the Go
+   binary with the UI embedded), starts Postgres, waits for its health
+   check, then starts the app, which applies migrations on boot.
+
+The first user to register is a normal user; promote an admin with the SQL
+in [development.md](development.md) through Coolify's database terminal
+(`docker exec` into the `db` container) or by connecting to Postgres from
+the app's network.
+
+Security properties carried over:
+
+- `ENV=prod` is fixed in the compose file: cookies are `Secure`, and the
+  app emits HSTS along with its other security headers, so nothing depends
+  on proxy configuration.
+- No `ports:` are published; the app is reachable only through the proxy,
+  the database only from the app.
+- The blob store and Postgres data are named volumes that survive
+  redeploys. Include both in backups (see [operations.md](operations.md)).
+- If Coolify's "force HTTPS" redirect is available for the resource, turn
+  it on; HSTS then makes it sticky for returning browsers.
 
 ## CI security gates
 

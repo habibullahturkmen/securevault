@@ -59,11 +59,16 @@ func withRecovery(log *slog.Logger, next http.Handler) http.Handler {
 }
 
 // withSecurityHeaders sets the response headers the proposal commits to.
-// HSTS is added by Caddy at the TLS boundary; everything content-related is
-// set here, in exactly one place.
-func withSecurityHeaders(next http.Handler) http.Handler {
+// Everything content-related is set here, in exactly one place. HSTS is
+// emitted outside dev mode so the guarantee does not depend on which TLS
+// proxy (Caddy, Coolify's Traefik, ...) sits in front; dev is plain-HTTP
+// localhost, where HSTS would only break the dev server.
+func withSecurityHeaders(devMode bool, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
+		if !devMode {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
 		h.Set("Content-Security-Policy",
 			"default-src 'self'; script-src 'self'; style-src 'self'; "+
 				"img-src 'self' data:; connect-src 'self'; object-src 'none'; "+

@@ -23,8 +23,8 @@ The ASCII rendering below carries the same structure for terminal readers:*
 └──────────────────────────┬──────────────────────────────────────────┘
                            │ HTTPS only                    ── boundary 1
 ┌─ Zone 2: TLS entry ──────▼──────────────────────────────────────────┐
-│  Caddy: TLS 1.3 termination, HSTS header                            │
-│  (deploy/Caddyfile — four lines, deliberately nothing else)         │
+│  Caddy (or Coolify's proxy): TLS 1.3 termination, nothing else      │
+│  (deploy/Caddyfile — HSTS and all headers come from the app)        │
 └──────────────────────────┬──────────────────────────────────────────┘
                            │ private Docker network        ── boundary 2
 ┌─ Zone 3: Trusted application ─▼─────────────────────────────────────┐

@@ -47,7 +47,7 @@ make web-dev                   # terminal 2 — UI on :5173 with hot reload
 
 Open http://localhost:5173. See [docs/development.md](docs/development.md)
 for the full workflow, and [docs/production.md](docs/production.md) for the
-production build and the Docker Compose demo stack.
+production build, the Docker Compose demo stack, and deploying on Coolify.
 
 Full documentation lives in [docs/](docs/README.md): architecture and design
 rationale, the complete API reference, the testing/evidence guide, the
@@ -81,7 +81,7 @@ internal/files/      upload/download/share/delete over storage + metadata
 internal/api/        HTTP handlers, middleware, CSRF, security headers
 internal/audit/      append-only audit event writer
 web/                 React + TypeScript UI (embedded via web/embed_on.go)
-deploy/              Dockerfile, docker-compose.yml, Caddyfile
+deploy/              Dockerfile, docker-compose.yml, Caddyfile (root: docker-compose.coolify.yml)
 docs/                development, production, and security documentation
 .github/workflows/   CI: fmt, vet, race tests, Semgrep, gitleaks, ZAP
 ```

@@ -626,6 +626,24 @@ func TestSecurityHeadersPresent(t *testing.T) {
 	}
 }
 
+// HSTS is the one header that must depend on mode: emitted for every
+// non-dev build (TLS is a precondition there) and never on plain-HTTP dev.
+// Exercised on the middleware directly so it runs without a database.
+func TestHSTSFollowsDevMode(t *testing.T) {
+	for _, tc := range []struct{ dev, want bool }{{true, false}, {false, true}} {
+		h := withSecurityHeaders(tc.dev, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/health", nil))
+		got := rec.Header().Get("Strict-Transport-Security") != ""
+		if got != tc.want {
+			t.Errorf("dev=%v: HSTS present=%v, want %v", tc.dev, got, tc.want)
+		}
+		if tc.want && rec.Header().Get("Strict-Transport-Security") != "max-age=31536000; includeSubDomains" {
+			t.Errorf("unexpected HSTS value %q", rec.Header().Get("Strict-Transport-Security"))
+		}
+	}
+}
+
 func TestMalformedInputRejected(t *testing.T) {
 	e := newEnv(t)
 	c := e.registerAndLogin(uniqueUser("fuzz"))

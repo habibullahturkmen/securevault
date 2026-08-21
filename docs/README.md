@@ -8,7 +8,7 @@ from design rationale to day-to-day operation.
 | [architecture.md](architecture.md) | Trust zones, components, database schema, the upload/download lifecycles, and the reasoning behind every major design decision (two-phase writes, hash-as-AAD, dedup, embedded migrations, single binary) | you need to explain *why* the system is built this way — e.g. in the presentation Q&A |
 | [api.md](api.md) | Every HTTP endpoint: request/response shapes, status codes, authentication and CSRF requirements, cookie and error semantics | you are writing client code or testing an endpoint by hand |
 | [development.md](development.md) | One-time setup, the two-terminal dev workflow (Go + Vite hot reload), migrations, running tests, promoting an admin | you are setting up a laptop to work on the project |
-| [production.md](production.md) | How the embedded frontend works, configuration reference, the Docker Compose stack, CI gates | you are building the release artifact or running the demo |
+| [production.md](production.md) | How the embedded frontend works, configuration reference, the Docker Compose stack, deploying on Coolify, CI gates | you are building the release artifact, running the demo, or deploying to a server |
 | [testing.md](testing.md) | The complete test inventory, what each adversarial test attacks, and how to capture evidence for the report | you are collecting proof for §7 of the report |
 | [operations.md](operations.md) | Runbook: master-key handling, backups, audit review, integrity-failure response, the pre-submission ZAP scan | something needs operating, recovering, or checking |
 | [security-controls.md](security-controls.md) | The STRIDE threat → control → test traceability table | you need the one-page map from claim to evidence |

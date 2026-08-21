@@ -1,0 +1,54 @@
+# SecureVault on Coolify: app (single Go binary, ENV=prod) + PostgreSQL.
+#
+# Coolify's own proxy (Traefik or Caddy) is the TLS 1.3 entry point and
+# provisions the certificate, so the Caddy service from docker-compose.yml
+# is deliberately absent here. The trust zones are otherwise identical:
+# only the app is published (through the proxy); the database and the
+# encrypted blob volume are reachable from the app alone.
+#
+# Coolify setup (Resource -> Docker Compose, from this Git repository):
+#   Base Directory:           /
+#   Docker Compose Location:  /docker-compose.coolify.yml
+#   Environment variables:    SECUREVAULT_MASTER_KEY  (make genkey; back it up)
+# SERVICE_FQDN_APP_8080 and SERVICE_PASSWORD_POSTGRES are Coolify "magic"
+# variables: the first becomes the domain you assign to the app (and routes
+# it to port 8080), the second is a generated password shared by both
+# services. Full walkthrough: docs/production.md, "Deploying on Coolify".
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    environment:
+      - SERVICE_FQDN_APP_8080
+      - SECUREVAULT_MASTER_KEY=${SECUREVAULT_MASTER_KEY:?generate with make genkey and set it in Coolify}
+      - DATABASE_URL=postgres://securevault:${SERVICE_PASSWORD_POSTGRES}@db:5432/securevault
+      - ENV=prod
+    volumes:
+      - blob-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    # No ports: Coolify attaches its proxy to this container on 8080 via
+    # SERVICE_FQDN_APP_8080; the host network never sees the app directly.
+
+  db:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=securevault
+      - POSTGRES_PASSWORD=${SERVICE_PASSWORD_POSTGRES}
+      - POSTGRES_DB=securevault
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U securevault"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  blob-data:
+  pg-data:

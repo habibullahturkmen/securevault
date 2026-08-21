@@ -94,7 +94,7 @@ func (s *Server) Handler() http.Handler {
 	}
 
 	var h http.Handler = mux
-	h = withSecurityHeaders(h)
+	h = withSecurityHeaders(s.devMode, h)
 	h = s.withLogging(h)
 	h = withRecovery(s.log, h)
 	h = withRequestID(h)

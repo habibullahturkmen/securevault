@@ -6,10 +6,7 @@
 localhost {
 	tls internal
 
-	# Transport security is decided here at the TLS boundary; all
-	# content-security headers come from the app so they exist in
-	# exactly one place.
-	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-
+	# All security headers, HSTS included, come from the app (ENV=prod) so
+	# they exist in exactly one place and survive a change of TLS proxy.
 	reverse_proxy app:8080
 }
