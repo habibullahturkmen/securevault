@@ -36,7 +36,7 @@ real Argon2id cost (64 MiB, t=3). That slowness is itself a control working.
 | Valid lifecycle (upload → list → download → share → delete; stored object is ciphertext; events logged) | `TestValidLifecycle`, `TestStoredObjectIsCiphertext` | api, storage |
 | Deduplication (two accounts, one object; independent deletion) | `TestDeduplication` (HTTP level), `TestDeduplication` (engine level) | api, storage |
 | Authentication (uniform failures, throttling, no timing difference) | `TestUniformCredentialErrors`, `TestThrottlingAfterRepeatedFailures`, `TestAddressThrottling` | auth |
-| Session handling (cookie attributes; reuse after logout/rotation rejected; DB holds only hashes) | `TestSessionHygiene`, `TestSessionRotationOnLogin`, `TestChangePasswordRevokesOtherSessions`, `TestExpiredSessionRejected` | api, auth |
+| Session handling (cookie attributes; reuse after logout/rotation rejected; DB holds only hashes; idle and absolute deadlines) | `TestSessionHygiene`, `TestSessionRotationOnLogin`, `TestChangePasswordRevokesOtherSessions`, `TestExpiredSessionRejected`, `TestIdleSessionRejected` | api, auth |
 | Authorization matrix (every endpoint × every role; denials recorded) | `TestAuthorizationMatrix` (pure matrix), `TestEndpointRoleMatrix` (live HTTP, 6 principals × 5 endpoints + audit assertion) | authz, api |
 | Object-level authorization (no grant / viewer / editor against another user's file) | rows of `TestEndpointRoleMatrix`; `TestDenyByDefault` | api, authz |
 | Filename / path handling (traversal names neutralized; no user-controlled path) | `TestTraversalFilenameNeutralized` (walks the data dir), `TestSanitizeFilename` | api, files |
@@ -80,6 +80,7 @@ real Argon2id cost (64 MiB, t=3). That slowness is itself a control working.
   (correct password still throttled once tripped), `TestAddressThrottling`
   (username spraying), `TestSessionRotationOnLogin`,
   `TestChangePasswordRevokesOtherSessions`, `TestExpiredSessionRejected`,
+  `TestIdleSessionRejected`,
   `TestAuditTrailForAuthEvents` (also greps the audit table for password
   leakage).
 
