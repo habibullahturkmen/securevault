@@ -4,6 +4,84 @@ Every protection the proposal claims is paired with an implemented control
 and an automated test that attacks it (proposal §6–7). This table is the
 traceability map; run `make race` to execute all of it.
 
+## Major controls: file and line evidence
+
+These are the shortest implementation paths to show during a demonstration.
+Line numbers refer to the source at this revision.
+
+### 1. Password hashing
+
+- `internal/auth/password.go:14-37` defines the Argon2id parameters and creates
+  a salted PHC-formatted password hash.
+- `internal/auth/password.go:40-49` verifies a supplied password using a
+  constant-time comparison.
+- `internal/auth/service.go:84-113` validates a new password, hashes it, and
+  inserts only `password_hash` into PostgreSQL.
+- `internal/auth/service.go:164-182` retrieves the stored hash and verifies it
+  during login; the plaintext password is never queried from the database.
+- `internal/database/migrations/0001_init.sql:11-18` defines the users table
+  with `password_hash`, not a plaintext-password column.
+
+### 2. API security
+
+- `web/src/api.ts:67-86` is the frontend JSON client. It serializes request
+  bodies as JSON, reads JSON responses, and sends the CSRF header on mutations.
+- `internal/api/server.go:53-106` defines the REST-style routes and applies
+  authentication, CSRF, and administrator middleware.
+- `internal/api/server.go:189-216` validates UUID route values, limits JSON
+  bodies to 16 KiB, rejects unknown fields, and emits JSON responses.
+- `internal/api/middleware.go:61-78` applies CSP, nosniff, same-origin, referrer,
+  and permissions security headers.
+- `internal/api/middleware.go:81-129` validates sessions, checks double-submit
+  CSRF tokens in constant time, and gates administrator routes.
+- `internal/authz/authz.go:42-83` is the deny-by-default file permission matrix.
+- `internal/files/files.go:253-270` re-authorizes each file operation on the
+  server; frontend button visibility is not trusted.
+- `deploy/Caddyfile:6-14` terminates TLS and adds HSTS.
+
+### 3. Secure sessions
+
+- `internal/auth/token.go:10-28` creates 256-bit random opaque session tokens
+  and hashes them with SHA-256 before database storage.
+- `internal/auth/service.go:46-53` sets the 30-minute inactivity timeout and
+  four-hour absolute lifetime.
+- `internal/auth/service.go:237-274` stores only the token hash and enforces
+  both deadlines while updating `last_seen_at`.
+- `internal/auth/service.go:277-287` invalidates the server-side session on
+  logout; `internal/auth/service.go:290-339` revokes all sessions and rotates
+  the identifier after a password change.
+- `internal/api/server.go:145-183` sets and clears `HttpOnly`, `Secure`,
+  `SameSite=Strict` session cookies and issues a separate CSRF cookie.
+- `internal/database/migrations/0001_init.sql:20-29` stores token hashes and the
+  absolute deadline; `internal/database/migrations/0003_session_timeouts.sql:1-12`
+  adds and initializes the inactivity timestamp.
+
+### 4. Encryption at rest
+
+- `internal/config/config.go:40-67` fails startup unless the environment
+  supplies a valid 32-byte master key.
+- `internal/storage/crypto.go:18-87` generates per-object data-encryption keys
+  and implements AES-256-GCM encryption, decryption, key wrapping, and tag
+  verification.
+- `internal/storage/store.go:99-163` hashes plaintext, encrypts it with a fresh
+  DEK and nonce, and writes only the encrypted object to disk.
+- `internal/storage/store.go:203-245` unwraps, decrypts, authenticates, and
+  SHA-256 re-verifies an object before returning any plaintext.
+- `internal/storage/store.go:270-273` derives disk paths from hashes rather
+  than user-controlled filenames.
+- `internal/database/migrations/0001_init.sql:41-60` stores the wrapped DEK and
+  sanitized metadata; plaintext file content is not stored in PostgreSQL.
+- `internal/files/files.go:315-336` authorizes a download before calling the
+  decrypting storage operation. An unauthorized request never reaches
+  decryption.
+
+### Malware scanning status
+
+ClamAV or another antivirus scanner is **not currently implemented**. Uploads
+receive size, filename, MIME-signature, encryption, and authorization checks,
+but they are not scanned for malware. Do not claim antivirus scanning as an
+implemented control during the demonstration.
+
 ## STRIDE coverage
 
 | Threat (STRIDE) | Control | Where implemented | Test that attacks it |
