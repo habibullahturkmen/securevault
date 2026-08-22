@@ -243,6 +243,30 @@ func TestExpiredSessionRejected(t *testing.T) {
 	}
 }
 
+func TestIdleSessionRejected(t *testing.T) {
+	s, pool := testService(t)
+	ctx := context.Background()
+	name := uniqueName("idle")
+	credential := name + " passphrase"
+
+	if _, err := s.Register(ctx, name, credential, ""); err != nil {
+		t.Fatal(err)
+	}
+	token, u, err := s.Login(ctx, name, credential, "203.0.113.14")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := pool.Exec(ctx, `
+		UPDATE sessions SET last_seen_at = now() - interval '31 minutes'
+		WHERE user_id = $1`, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.ValidateSession(ctx, token); !errors.Is(err, ErrSessionInvalid) {
+		t.Errorf("idle session accepted: err = %v", err)
+	}
+}
+
 func TestRegistrationPolicy(t *testing.T) {
 	s, _ := testService(t)
 	ctx := context.Background()

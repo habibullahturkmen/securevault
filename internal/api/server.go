@@ -151,7 +151,7 @@ func (s *Server) setSessionCookies(w http.ResponseWriter, token string) error {
 	http.SetCookie(w, &http.Cookie{
 		Name: sessionCookie, Value: token, Path: "/",
 		HttpOnly: true, Secure: !s.devMode, SameSite: http.SameSiteStrictMode,
-		MaxAge: 24 * 60 * 60,
+		MaxAge: 4 * 60 * 60,
 	})
 	// Fresh CSRF token alongside every fresh session.
 	buf := make([]byte, 32)
@@ -166,7 +166,7 @@ func (s *Server) setSessionCookies(w http.ResponseWriter, token string) error {
 	http.SetCookie(w, &http.Cookie{
 		Name: csrfCookie, Value: base64.RawURLEncoding.EncodeToString(buf), Path: "/",
 		HttpOnly: false, Secure: !s.devMode, SameSite: http.SameSiteStrictMode,
-		MaxAge: 24 * 60 * 60,
+		MaxAge: 4 * 60 * 60,
 	})
 	return nil
 }

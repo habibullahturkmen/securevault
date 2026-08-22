@@ -565,6 +565,9 @@ func TestSessionHygiene(t *testing.T) {
 			if ck.SameSite != http.SameSiteStrictMode {
 				t.Error("session cookie is not SameSite=Strict")
 			}
+			if ck.MaxAge != 4*60*60 {
+				t.Errorf("session cookie MaxAge = %d, want 4 hours", ck.MaxAge)
+			}
 		}
 	}
 	if !sessionSeen {

@@ -178,9 +178,9 @@ metadata commits.
 
 ## 7. Routine maintenance
 
-- **Expired sessions**: rows linger after `expires_at` (validation already
-  rejects them). Housekeeping:
-  `DELETE FROM sessions WHERE expires_at < now();`
+- **Expired sessions**: rows linger after their four-hour absolute deadline or
+  30-minute inactivity deadline (validation already rejects them). Housekeeping:
+  `DELETE FROM sessions WHERE expires_at < now() OR last_seen_at < now() - interval '30 minutes';`
 - **Login failures**: pruned opportunistically on every throttle check;
   no action needed.
 - **Orphan objects** (post-crash leftovers): reclaimed automatically when

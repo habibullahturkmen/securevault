@@ -84,7 +84,7 @@ automatically (see §6.4).
 | Table | Purpose | Security-relevant columns |
 |---|---|---|
 | `users` | accounts | `password_hash` — Argon2id PHC string; `role` ∈ {user, admin} |
-| `sessions` | server-side sessions | `token_hash` — SHA-256 of the opaque cookie token; `expires_at` |
+| `sessions` | server-side sessions | `token_hash` — SHA-256 of the opaque cookie token; `last_seen_at` enforces 30 minutes idle; `expires_at` enforces four hours absolute |
 | `login_failures` | throttling window | `key` — `u:<username>` or `ip:<addr>`; pruned opportunistically |
 | `invites` | one-time registration codes (`REGISTRATION_MODE=invite`) | `code_hash` — SHA-256 of the code, plaintext never stored; `expires_at`, `used_by`/`used_at`, `revoked_at` |
 | `blobs` | one row per unique content | `hash` (PK) — SHA-256 of *plaintext*; `wrapped_dek`; `ref_count` |
@@ -227,8 +227,9 @@ is written out and asserted.
 
 Tokens are 256-bit random values; the database stores only their SHA-256
 (`TestSessionHygiene` proves the cookie value never appears in the DB). A
-database leak therefore yields nothing replayable. Rotation happens on every
-login, and a password change revokes *all* sessions and issues a fresh one.
+database leak therefore yields nothing replayable. Sessions expire after 30
+minutes without activity and always expire four hours after login. Rotation
+happens on every login, and a password change revokes *all* sessions and issues a fresh one.
 Cookies: `HttpOnly` (no script access), `SameSite=Strict` (no cross-site
 sends), `Secure` outside dev mode.
 

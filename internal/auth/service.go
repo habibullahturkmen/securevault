@@ -48,7 +48,8 @@ const (
 	throttleWindow      = 15 * time.Minute
 	throttleUserMax     = 10 // failures per username in window
 	throttleAddrMax     = 30 // failures per client address in window
-	defaultSessionTTL   = 24 * time.Hour
+	sessionIdleTTL      = 30 * time.Minute
+	sessionAbsoluteTTL  = 4 * time.Hour
 	roleUser, roleAdmin = "user", "admin"
 )
 
@@ -64,14 +65,16 @@ func (u *User) IsAdmin() bool { return u.Role == roleAdmin }
 
 // Service provides registration, login, session, and password operations.
 type Service struct {
-	pool       *pgxpool.Pool
-	audit      *audit.Logger
-	sessionTTL time.Duration
-	policy     RegistrationPolicy // see registration.go
+	pool               *pgxpool.Pool
+	audit              *audit.Logger
+	sessionIdleTTL     time.Duration
+	sessionAbsoluteTTL time.Duration
+	policy             RegistrationPolicy // see registration.go
 }
 
 func NewService(pool *pgxpool.Pool, auditLog *audit.Logger) *Service {
-	return &Service{pool: pool, audit: auditLog, sessionTTL: defaultSessionTTL,
+	return &Service{pool: pool, audit: auditLog,
+		sessionIdleTTL: sessionIdleTTL, sessionAbsoluteTTL: sessionAbsoluteTTL,
 		policy: RegistrationPolicy{Mode: RegistrationOpen}}
 }
 
@@ -239,23 +242,29 @@ func (s *Service) createSession(ctx context.Context, userID string) (string, err
 	if _, err := s.pool.Exec(ctx, `
 		INSERT INTO sessions (user_id, token_hash, expires_at)
 		VALUES ($1, $2, now() + $3::interval)`,
-		userID, hash, s.sessionTTL.String()); err != nil {
+		userID, hash, s.sessionAbsoluteTTL.String()); err != nil {
 		return "", fmt.Errorf("auth: create session: %w", err)
 	}
 	return token, nil
 }
 
-// ValidateSession resolves a client token to its user, enforcing expiry.
+// ValidateSession resolves a client token to its user. It enforces both the
+// absolute lifetime and the inactivity timeout, then records this request as
+// activity without extending the absolute deadline.
 func (s *Service) ValidateSession(ctx context.Context, token string) (*User, error) {
 	if token == "" {
 		return nil, ErrSessionInvalid
 	}
 	u := &User{}
 	err := s.pool.QueryRow(ctx, `
-		SELECT u.id, u.username, u.role
-		FROM sessions s JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1 AND s.expires_at > now()`,
-		HashToken(token)).Scan(&u.ID, &u.Username, &u.Role)
+		UPDATE sessions AS s SET last_seen_at = now()
+		FROM users u
+		WHERE s.user_id = u.id
+		  AND s.token_hash = $1
+		  AND s.expires_at > now()
+		  AND s.last_seen_at > now() - $2::interval
+		RETURNING u.id, u.username, u.role`,
+		HashToken(token), s.sessionIdleTTL.String()).Scan(&u.ID, &u.Username, &u.Role)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrSessionInvalid
 	}
